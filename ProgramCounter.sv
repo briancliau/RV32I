@@ -1,0 +1,40 @@
+`timescale 1ns/1ps
+module ProgramCounter
+#(
+    parameter rvDefs::mem_addr_t RESET_VALUE = rvDefs::mem_addr_t'(0)
+)
+(
+    input  logic              clk,        // loads next instruction address on rising edge
+    input  logic              resetN,     // async sets the next address to be RESET_VALUE on clock rising edge
+    input  logic              enable,     // if the address output can update when clocked
+    input  logic              branchPrediction,       // if addrLoad should become the next address
+                                          //   evaluated on falling edge of clock
+    input  logic              branchCorrection,
+    input  rvDefs::mem_addr_t addrLoad,   // value to set the next address to
+    input  rvDefs::mem_addr_t branchCorrectionLoad,
+    output rvDefs::mem_addr_t addrOut     // the address of the instruction currently being fetched
+
+);
+
+    localparam rvDefs::mem_addr_t INCREMENT = 32'd4;
+    rvDefs::mem_addr_t addrNext;
+    
+    always_comb begin
+        if (branchPrediction) begin
+            addrNext = addrLoad;
+        end else if (branchCorrection) begin
+            addrNext = branchCorrectionLoad;
+        end else begin
+            addrNext = addrOut + INCREMENT;
+        end
+    end
+
+    always_ff @(posedge clk or negedge resetN) begin
+        if (!resetN) begin
+            addrOut <= RESET_VALUE;
+        end else if (enable) begin
+            addrOut <= addrNext;
+        end
+    end
+
+endmodule
