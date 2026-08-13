@@ -3,30 +3,38 @@ module IFID_register (
     input logic                     resetN,
     input logic                     IFID_write,
     input logic                     flush,
-    input rvDefs::mem_addr_t        instructionAddress_IF,
-    input rvDefs::instruction_t     instructions_IF,
-    output rvDefs::instruction_t    instructions_ID,
-    output rvDefs::mem_addr_t       instructionAddress_ID
+    input logic [31:0]              instructionAddress_IF,
+    input logic [31:0]              instruction_IF,
+    output logic [31:0]             instruction_ID,
+    output logic [31:0]             instructionAddress_ID
 );
+    logic [31:0] instruction_ID_temp;
+    logic [31:0] instructionAddress_ID_temp;
+
+    always_comb begin
+        if (flush) begin
+            instruction_ID_temp        = 32'h0000_0013;   // NOP
+            instructionAddress_ID_temp = instructionAddress_IF;
+        end
+        else if (IFID_write) begin
+            instruction_ID_temp        = instruction_IF;
+            instructionAddress_ID_temp = instructionAddress_IF;
+        end
+        else begin  // stall — hold current register values
+            instruction_ID_temp        = instruction_ID;
+            instructionAddress_ID_temp = instructionAddress_ID;
+        end
+    end
 
     always_ff @(posedge clk or negedge resetN) begin
         if (!resetN) begin
-            instructions_ID <= 32'b0;
+            instruction_ID <= 32'b0;
             instructionAddress_ID <= 32'b0;
         end
-        else if (flush) begin
-            instructions_ID <= 32'h0000_0013;                   // NOP
-            instructionAddress_ID <= instructionAddress_ID;
-        end
-        else if (IFID_write) begin
-            instructions_ID <= instructions_IF;
-            instructionAddress_ID <= instructionAddress_IF;
-        end
-        else if (!IFID_write) begin
-            instructions_ID <= instructions_ID;           // NOP 32'h0000_0013
-            instructionAddress_ID <= instructionAddress_ID;
-        end
-        
+        else begin
+            instruction_ID <= instruction_ID_temp;
+            instructionAddress_ID <= instructionAddress_ID_temp;
+        end 
     end
 
 endmodule

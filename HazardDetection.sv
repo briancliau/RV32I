@@ -14,7 +14,7 @@ module HazardDetection (
     logic loadInstruction;
     rvDefs::opcode_t opcode;
     assign opcode = rvDefs::opcode_t'(instruction_IF[6 : 0]);
-    assign loadInstruction = (opcode == OPCODE_LOAD);
+    assign loadInstruction = (opcode == rvDefs::OPCODE_LOAD);
 
     always_comb begin
         PC_update = 1'b1;

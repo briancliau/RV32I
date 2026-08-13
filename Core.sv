@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 module Core
 (
-    input  logic                 clk,
-    input  logic                 resetN,
+    input  logic                 CLK,
+    input  logic                 RSTN,
     input  rvDefs::instruction_t instruction,        // instruction value from imem
     output rvDefs::mem_addr_t    instructionAddress, // instruction address to imem
     output rvDefs::mem_addr_t    memAddress,         // address to memory space
@@ -34,11 +34,6 @@ module Core
     logic pipelineFlush;
     rvDefs::word_t branchAddress;
     logic loadPCValue;
-
-    /******************************
-     * IF stage signals
-     ******************************/
-    // instructionAddress is a top-level output, driven by ProgramCounter
 
     /******************************
      * IF/ID pipeline register outputs  (ID stage inputs)
@@ -150,8 +145,8 @@ module Core
 
     // Program counter — updated from EX stage branch/jump result
     ProgramCounter programCounter(
-        .clk                    (clk),
-        .resetN                 (resetN),
+        .clk                    (CLK),
+        .resetN                 (RSTN),
         .enable                 (PC_update & IFID_write),
         .branchPrediction       (loadPCValue),
         .branchCorrection       (branchCorrection),
@@ -162,14 +157,14 @@ module Core
 
     // IF/ID pipeline register
     IFID_register IFID_stage(
-        .clk                    (clk),
-        .resetN                 (resetN),
-        .IFID_write             (IFID_write),
-        .flush                  (pipelineFlush),
-        .instructionAddress_IF  (instructionAddress),
-        .instructionAddress_ID  (instructionAddress_ID),
-        .instructions_IF        (instruction),
-        .instructions_ID        (instruction_ID)
+        .clk                        (CLK),
+        .resetN                     (RSTN),
+        .IFID_write                 (IFID_write),
+        .flush                      (pipelineFlush),
+        .instructionAddress_IF      (instructionAddress),
+        .instructionAddress_ID      (instructionAddress_ID),
+        .instruction_IF             (instruction),
+        .instruction_ID             (instruction_ID)
     );
 
     // Immediate generator reads from ID stage instruction
@@ -201,8 +196,8 @@ module Core
 
     // Register file — reads in ID, writes from WB
     XRegisterFile xRegisterFile(
-        .clk        (clk),
-        .writeEnable (writeEnable_WB),
+        .clk        (CLK),
+        .writeEnable(writeEnable_WB),
         .read1Reg   (rs1),
         .read2Reg   (rs2),
         .writeReg   (rd_WB),
@@ -213,28 +208,28 @@ module Core
 
     // Branch predictor unit
     BranchPredictor branchPredictor (
-        .clk(clk),
-        .resetN(resetN),
-        .branchTaken(branchTaken_EX),
-        .branchRequested(branchOp != rvDefs::BRANCH_OP_NONE),
-        .branchPrediction(branchPrediction)
+        .clk                (CLK),
+        .resetN             (RSTN),
+        .branchTaken        (branchTaken_EX),
+        .branchRequested    (branchOp != rvDefs::BRANCH_OP_NONE),
+        .branchPrediction   (branchPrediction)
     );
 
     BranchAddresser branchAddresser(
-        .PCAddress(instructionAddress_ID),
-        .offset(immediate),
-        .branchTargetJALR(branchTargetJALR),
-        .opcode(instruction_ID[6:0]),
-        .BranchAddress(branchAddress)
+        .PCAddress          (instructionAddress_ID),
+        .offset             (immediate),
+        .branchTargetJALR   (branchTargetJALR),
+        .opcode             (instruction_ID[6:0]),
+        .BranchAddress      (branchAddress)
     );
 
     // Hazard detection unit
     HazardDetection hazardDetection(
-        .clk            (clk),
-        .resetN         (resetN),
+        .clk            (CLK),
+        .resetN         (RSTN),
         .IDEX_r1        (rs1),
         .IDEX_r2        (rs2),
-        .EXMEM_rd        (rd_EX),
+        .EXMEM_rd       (rd_EX),
         .IDEX_memread   (storeLoad_EX == 1'b0 && memoryOpSize_EX != rvDefs::MEMORY_OP_SIZE_NONE),
         .instruction_IF (instruction),
         .PC_update      (PC_update),
@@ -244,7 +239,7 @@ module Core
 
     // Forwarding unit
     ForwardingUnit forwardingUnit(
-        .resetN         (resetN),
+        .resetN         (RSTN),
         .rs1            (rs1_EX),
         .rs2            (rs2_EX),
         .EXMEM_rd       (rd_MEM),
@@ -263,8 +258,8 @@ module Core
     // Also receives zeroXaluPrimary, branchOp, branchNegate, jump
     // (add these to IDEX_register port list if not already present)
     IDEX_register IDEX_stage(
-        .clk                        (clk),
-        .resetN                     (resetN),
+        .clk                        (CLK),
+        .resetN                     (RSTN),
         .flush                      (pipelineFlush),
         .IDEX_delay                 (IDEX_delay),
         .read1Data_ID               (read1Data),
@@ -415,8 +410,8 @@ module Core
 
     // EX/MEM pipeline register
     EXMEM_register EXMEM_stage(
-        .clk                    (clk),
-        .resetN                 (resetN),
+        .clk                    (CLK),
+        .resetN                 (RSTN),
         .memoryOpSize_EX        (memoryOpSize_EX),
         .unsignedLoad_EX        (unsignedLoad_EX),
         .storeLoad_EX           (storeLoad_EX),
@@ -452,8 +447,8 @@ module Core
 
     // MEM/WB pipeline register
     MEMWB_register MEMWB_stage(
-        .clk                    (clk),
-        .resetN                 (resetN),
+        .clk                    (CLK),
+        .resetN                 (RSTN),
         .rd_MEM                 (rd_MEM),
         .address_MEM            (address_MEM),
         .writeEnable_MEM        (writeEnable_MEM),

@@ -11,8 +11,8 @@ $timescale 1ps $end
    $var wire 32 V! WORD_BITS [31:0] $end
   $upscope $end
   $scope module tb $end
-   $var wire 1 G! clk $end
-   $var wire 1 H! resetN $end
+   $var wire 1 G! CLK $end
+   $var wire 1 H! RSTN $end
    $var wire 1 I! stall $end
    $var wire 32 6 instruction [31:0] $end
    $var wire 32 7 instructionAddress [31:0] $end
@@ -23,8 +23,8 @@ $timescale 1ps $end
    $var wire 1 "! memWrite $end
    $var wire 3 #! memSize [2:0] $end
    $scope module dut $end
-    $var wire 1 G! clk $end
-    $var wire 1 H! resetN $end
+    $var wire 1 G! CLK $end
+    $var wire 1 H! RSTN $end
     $var wire 32 6 instruction [31:0] $end
     $var wire 32 7 instructionAddress [31:0] $end
     $var wire 32 } memAddress [31:0] $end
@@ -224,6 +224,7 @@ $timescale 1ps $end
      $var wire 32 O! branchTargetJALR [31:0] $end
      $var wire 7 B! opcode [6:0] $end
      $var wire 32 K! BranchAddress [31:0] $end
+     $var wire 32 K! BranchingAddress [31:0] $end
     $upscope $end
     $scope module branchPredictor $end
      $var wire 1 G! clk $end

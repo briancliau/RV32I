@@ -5,15 +5,17 @@ module BranchAddresser (
     input rvDefs::opcode_t opcode,
     output [31:0] BranchAddress
 );
+    logic [31:0] BranchingAddress;
+
     always_comb begin
         if (opcode == rvDefs::OPCODE_JAL) begin
-            BranchAddress = PCAddress + offset;
+            BranchingAddress = PCAddress + offset;
         end else if (opcode == rvDefs::OPCODE_BRANCH) begin
-            BranchAddress = PCAddress + offset;
-        // end else if (opcode == rvDefs::OPCODE_JALR) begin
-        //     BranchAddress = branchTargetJALR;
+            BranchingAddress = PCAddress + offset;
         end else begin
-            BranchAddress = 32'b0;
+            BranchingAddress = 32'b0;
         end
     end
+
+    assign BranchAddress = BranchingAddress;
 endmodule

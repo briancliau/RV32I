@@ -1,0 +1,126 @@
+#include "hwpe_sha256_driver.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/sys/sys_io.h>
+#include <string.h>
+#include <stdio.h>
+#include <zephyr/toolchain.h>
+
+#include "sha256_definitions.h"
+
+#define HWPE_SHA256_EVENT_ID 142
+
+/* Native Event Unit callback prototype used by puppy_event.c */
+typedef void (*event_callback_t)(unsigned int event_num, void *userdata);
+
+/* External Puppy Event Unit subsystem dependencies */
+extern int puppy_event_register_callback(event_callback_t callback, void *userdata);
+extern int puppy_event_enable(unsigned int event_num);
+extern int puppy_event_disable(unsigned int event_num);
+
+/* Synchronization primitives and cluster memory allocations */
+static struct k_sem hwpe_done_sem;
+static uint8_t __nocache __aligned(16) hw_input_block[64];
+static uint8_t __nocache __aligned(16) hw_digest_state[32];
+
+/*---------------------------------------------------------------------------
+ * Internal Event Unit Interrupt Context Handler
+ *--------------------------------------------------------------------------*/
+static void hwpe_sha256_event_callback(unsigned int event_num, void *userdata)
+{
+    ARG_UNUSED(userdata);
+    if (event_num == HWPE_SHA256_EVENT_ID) {
+        k_sem_give(&hwpe_done_sem);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Interleaved RAM Word Byte Swapper
+ *--------------------------------------------------------------------------*/
+static void bswap_words_safe(uint32_t addr, size_t byte_len)
+{
+    size_t n = byte_len / 4;
+    for (size_t i = 0; i < n; i++) {
+        uint32_t current_word = sys_read32(addr + (i * 4));
+        uint32_t swapped_word = __builtin_bswap32(current_word);
+        sys_write32(swapped_word, addr + (i * 4));
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Block Compression Interface
+ *--------------------------------------------------------------------------*/
+static void hwpe_process_block(const uint8_t *block_data, size_t pad_len)
+{
+    memcpy(hw_input_block, block_data, pad_len);
+    bswap_words_safe((uint32_t)hw_input_block, 64);
+
+    sys_write32(0x1, CFG_SOFT_CLEAR_SHA256);
+    k_busy_wait(1);
+    sys_write32(0x1, GEN_PARAM_ENG_CTRL_SHA256);
+    k_busy_wait(1);
+    sys_write32(0x0, GEN_PARAM_ENG_CTRL_SHA256);
+    k_busy_wait(1);
+
+    sys_write32((uint32_t)hw_input_block,  HWPE_PARAM_SOURCE_SHA256);
+    sys_write32((uint32_t)hw_digest_state, HWPE_PARAM_SINK_SHA256);
+    sys_write32(16,                        HWPE_PARAM_SRC_SIZE_SHA256);
+    sys_write32(pad_len,                   HWPE_PARAM_SINK_SIZE_SHA256);
+
+    sys_write32(1,  HWPE_PARAM_SRC_LINE_LEN_SHA256);
+    sys_write32(4,  HWPE_PARAM_SRC_LINE_STR_SHA256);
+    sys_write32(16, HWPE_PARAM_SRC_FEAT_LEN_SHA256);
+    sys_write32(0,  HWPE_PARAM_SRC_FEAT_STR_SHA256);
+
+    sys_write32(1,  HWPE_PARAM_SINK_LINE_LEN_SHA256);
+    sys_write32(4,  HWPE_PARAM_SINK_LINE_STR_SHA256);
+    sys_write32(8,  HWPE_PARAM_SINK_FEAT_LEN_SHA256);
+    sys_write32(0,  HWPE_PARAM_SINK_FEAT_STR_SHA256);
+
+    puppy_event_enable(HWPE_SHA256_EVENT_ID);
+    sys_write32(0x1, CFG_ACQUIRE_SHA256);
+    sys_write32(0x1, CFG_TRIGGER_SHA256);
+
+    k_sem_take(&hwpe_done_sem, K_FOREVER);
+    puppy_event_disable(HWPE_SHA256_EVENT_ID);
+
+    bswap_words_safe((uint32_t)hw_digest_state, 32);
+}
+
+/*---------------------------------------------------------------------------
+ * Public Universal Entry API Function
+ *--------------------------------------------------------------------------*/
+int hwpe_sha256_hash(const uint8_t *input, size_t len, uint8_t output_digest[32])
+{
+    k_sem_init(&hwpe_done_sem, 0, 1);
+
+    int err = puppy_event_register_callback(hwpe_sha256_event_callback, NULL);
+    if (err < 0) {
+        return err;
+    }
+
+    size_t total_zero_padding; 
+    if ((len % 64) > 61) {
+        total_zero_padding = 61 - (len % 64);
+    } else {
+        total_zero_padding = 64 - (len % 64);
+    }
+
+    size_t total_len = len + total_zero_padding + 3;
+    uint8_t final_padded_window[len + total_zero_padding + 3];
+    memset(final_padded_window, 0, sizeof(final_padded_window));
+    final_padded_window[len] = 0x80;
+
+    memcpy(final_padded_window, &input[0], len);
+    
+    uint8_t high_byte = (uint8_t)((len >> 8) & 0xFF); // Gets the upper 8 bits
+    uint8_t low_byte  = (uint8_t)(len & 0xFF);        // Gets the lower 8 bits
+    final_padded_window[len + total_zero_padding + 1] = high_byte;
+    final_padded_window[len + total_zero_padding + 2] = low_byte;
+
+    hwpe_process_block(&final_padded_window[0], total_len);
+
+    memcpy(output_digest, hw_digest_state, 32);
+
+    return 0;
+}
