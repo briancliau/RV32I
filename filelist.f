@@ -15,3 +15,4 @@ LSU.sv
 MEMWB_register.sv
 Core.sv
 tb.sv
+tb_comprehensive.sv

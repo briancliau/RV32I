@@ -32,8 +32,7 @@ module EXMEM_register (
             writeSource_MEM <= rvDefs::WRITE_SRC_NONE;
             instructionAddress_MEM <= 32'b0;
             memWriteData_MEM <= 32'b0;
-        end 
-        else begin
+        end else begin
             rd_MEM <= rd_EX;
             memoryOpSize_MEM <= memoryOpSize_EX;
             unsignedLoad_MEM <= unsignedLoad_EX;

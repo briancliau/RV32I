@@ -97,7 +97,7 @@ module Core
      ******************************/
     rvDefs::word_t           fwd_rs1;           // forwarded rs1 value
     rvDefs::word_t           fwd_rs2;           // forwarded rs2 value
-    rvDefs::word_t           branchTargetJALR;       // calculated branch target address
+    rvDefs::word_t           branchTargetJALR;  // calculated branch target address
     rvDefs::word_t           xalu_primary;      // muxed XALU primary input
     rvDefs::word_t           xalu_secondary;    // muxed XALU secondary input
     rvDefs::word_t           aluResult;         // XALU result
@@ -394,7 +394,7 @@ module Core
         if (branchMispredicted_EX) begin
             branchCorrection = 1'b1;
             
-            if (branchTaken_EX) begin
+            if (branchTaken_EX || JALR_EX) begin
                 if (opcodeBranchResolution == rvDefs::OPCODE_JALR) begin
                     branchCorrectionAddress = aluResult;
                 end else begin
@@ -406,7 +406,7 @@ module Core
         end
     end
 
-    assign pipelineFlush = branchCorrection | (jump && !JALR_flag);
+    assign pipelineFlush = branchCorrection || jump_EX || JALR_EX;
 
     // EX/MEM pipeline register
     EXMEM_register EXMEM_stage(
@@ -485,10 +485,3 @@ module Core
     assign memAddress = address_MEM;
 
 endmodule
-
-// Issue with JALR and not having a hazard detection for it so that it is setting the address to write back to prior to the finishing of the hazard
-// Branch addresser setting JAL at ID but need to be at EX to get the proper location -> 1 cycle too early (or 2 cycles if MEM)
-// jump_ex is forcing a double correction from branch prediction 
-// maybe issue is that the flush only does it for the IFID and IDEX registers
-
-// Need to document process

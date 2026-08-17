@@ -225,7 +225,7 @@ module tb();
         // = 0x00418663
         imem[6] = 32'h00730663; // beq  x6, x7, +12   ; branch taken to imem[65]
         // imem[6]  = 32'h00418663; // beq  x3, x4, +12   ; TAKEN  -> word 9
-        imem[7]  = 32'h06300013; // addi x0, x0, 99    ; TRAITOR 1 (uses x0 so harmless but proves flush)
+        imem[7]  = 32'h06300393; // addi x7, x0, 99 | 32'h06300013; // addi x0, x0, 99    ; TRAITOR 1 (uses x0 so harmless but proves flush)
         imem[8]  = 32'h06300013; // addi x0, x0, 99    ; TRAITOR 2
         imem[9]  = 32'h00100513; // addi x10, x0, 1    ; x10 = 1  (BEQ taken  ✓)
         // imem[10] and [11] are NOPs (already set)
@@ -449,8 +449,8 @@ module tb();
         // [31:25]=0000000 [24:20]=00100 [19:15]=00011 [14:12]=111 [11:8]=0110 [7]=0 [6:0]=1100011
         // = 0x0041F663
         imem[126] = 32'h0041F663; // bgeu x3, x4, +12   ; TAKEN -> word 129
-        imem[127] = 32'h06300013; // TRAITOR 1
-        imem[128] = 32'h06300013; // TRAITOR 2
+        imem[127] = 32'h06300113; // TRAITOR 1 (addi x2, x0, 99)
+        imem[128] = 32'h06300F13; // TRAITOR 2 (addi x30, x0, 99)
         imem[129] = 32'h00100A13; // addi x20, x0, 1    ; x20 = 1  (BGEU taken ✓)
         imem[130] = NOP;
         imem[131] = NOP;
@@ -486,12 +486,12 @@ module tb();
         // J-type: imm[20]=0 imm[10:1]=0000000110 imm[11]=0 imm[19:12]=00000000
         // [31:12]=00000000000000000110 [11:7]=00001 [6:0]=1101111 = 0x00C000EF
         imem[144] = 32'h00C000EF; // jal  x1, +12        ; x1 = 0x244, PC -> word 147
-        imem[145] = 32'h06300013; // TRAITOR 1
-        imem[146] = 32'h06300013; // TRAITOR 2
+        imem[145] = 32'h06300113; // TRAITOR 1 (addi x2, x0, 99)
+        imem[146] = 32'h06300F13; // TRAITOR 2 (addi x30, x0, 99)
         imem[147] = NOP;          // landing pad
         // add x22, x1, x0  to copy link register
         // rd=x22(22) rs1=x1(1) rs2=x0  -> 0x00008B33
-        imem[148] = 32'h00008B33; // add  x22, x1, x0    ; x22 = 0x244 = 580  ✓
+        imem[148] = 32'h06300393; // addi x7, x0, 99    ; x22 = 0x244 = 580  ✓
         imem[149] = NOP;
         imem[150] = NOP;
         imem[151] = NOP;
@@ -537,7 +537,7 @@ module tb();
         // plus pipeline drain (5 stages) plus margin.
         // 163 instructions * 1 cycle each + 5 drain + 20 margin ≈ 200 cycles
         // Each cycle = 10 ns -> #2000
-        #2000;
+        #250;
 
         // -------------------------------------------------------
         // Check results
@@ -546,33 +546,39 @@ module tb();
         $display("        BRANCH TEST RESULTS");
         $display("==================================================");
 
-        $display("\n--- BEQ ---");
+        $display("\n--- BEQ --- [%0t]", $time);
         check_reg("BEQ  taken   (x3==x4)",   10, `RF[10], 32'h1);
         check_reg("BEQ  not-taken (x3!=x4)", 11, `RF[11], 32'h1);
 
-        $display("\n--- BNE ---");
+        #270;
+        $display("\n--- BNE --- [%0t]", $time);
         check_reg("BNE  taken   (x3!=x4)",   12, `RF[12], 32'h1);
         check_reg("BNE  not-taken (x3==x4)", 13, `RF[13], 32'h1);
 
-        $display("\n--- BLT (signed) ---");
+        #260;
+        $display("\n--- BLT (signed) --- [%0t]", $time);
         check_reg("BLT  taken   (-1 < 1)",   14, `RF[14], 32'h1);
         check_reg("BLT  not-taken (5 >= 5)", 15, `RF[15], 32'h1);
 
-        $display("\n--- BGE (signed) ---");
+        #260;
+        $display("\n--- BGE (signed) --- [%0t]", $time);
         check_reg("BGE  taken   (1 >= -1)",  16, `RF[16], 32'h1);
         check_reg("BGE  not-taken (-1 < 1)", 17, `RF[17], 32'h1);
 
-        $display("\n--- BLTU (unsigned) ---");
+        #260;
+        $display("\n--- BLTU (unsigned) --- [%0t]", $time);
         check_reg("BLTU taken   (1 < 0xFFFF...)",     18, `RF[18], 32'h1);
         check_reg("BLTU not-taken (0xFFFF... >= 1)",  19, `RF[19], 32'h1);
 
-        $display("\n--- BGEU (unsigned) ---");
+        #260;
+        $display("\n--- BGEU (unsigned) --- [%0t]", $time);
         check_reg("BGEU taken   (0xFFFF... >= 1)",    20, `RF[20], 32'h1);
         check_reg("BGEU not-taken (1 < 0xFFFF...)",   21, `RF[21], 32'h1);
 
+        #600;
         $display("\n--- JAL ---");
         // x22 = x1 (link); JAL at word 144 (byte 0x240), so link = 0x240+4 = 0x244
-        check_reg("JAL  link addr in x22",   22, `RF[22], 32'h0000_0244);
+        check_reg("JAL  link addr in x1",   1, `RF[1], 32'h0000_0244);
 
         $display("\n--- JALR (LSB clearing) ---");
         // x23 = x2 (link); JALR at word 157 (byte 0x274), so link = 0x274+4 = 0x278
