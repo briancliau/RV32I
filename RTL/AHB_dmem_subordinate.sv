@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+import AHB_pkg::*;
 
 module AHB_dmem_subordinate 
 #(parameter int unsigned ADDR_BITS, parameter int unsigned NUM_WAITS = 0)
