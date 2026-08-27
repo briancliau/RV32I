@@ -1,20 +1,32 @@
 `timescale 1ns/1ps
 module Core
 (
+    // Core Interface
     input  logic                 CLK,
     input  logic                 RSTN,
-    input  logic                 stall               // if the core should stall
+    input  logic                 stall,
+
+    // Instruction Manager Interface (To AHBInstructionManager)
+    output logic                 nextInstructionFlag,
+    output rvDefs::mem_addr_t    nextInstructionAddress,
+    input  rvDefs::word_t        instruction,
+    input  rvDefs::mem_addr_t    instructionAddressAHB,
+    input  logic                 HREADY_ibus,
+
+    // Data Manager Interface (To AHBDataManager)
+    output logic                 memWrite,
+    output logic                 memRead,
+    output rvDefs::mem_addr_t    addressLSU,
+    output rvDefs::word_t        writeDataLSU,
+    output logic [2:0]           memSize,
+    input  rvDefs::word_t        memReadData,
+    input  logic                 HREADY_dbus
 );
     /******************************
      * IF stage signals
      ******************************/
-    rvDefs::instruction_t instruction;      
     rvDefs::mem_addr_t    instructionAddress;
-    rvDefs::word_t        memReadData;
     rvDefs::word_t        memWriteData;
-    logic                 memRead;
-    logic                 memWrite;
-    logic [2 : 0]         memSize;
 
     /******************************
      * hazard / forwarding signals
@@ -29,19 +41,21 @@ module Core
     /******************************
      * branch signals (resolved in EX)
      ******************************/
-    logic branchPass;
-    logic branchTaken_EX;
-    logic branchPrediction;
-    logic jump_EX;
-    logic pipelineFlush;
-    logic pipelineFlushIF;
-    rvDefs::word_t branchAddress;
-    logic loadPCValue;
-    logic branchCorrectionJALR;
-    logic JALRCorrection;
-    logic addressCorrectionFlag;
-    rvDefs::word_t JALRAddress;
-    rvDefs::word_t addressCorrectionLoad;
+    logic               branchPass;
+    logic               branchTaken_EX;
+    logic               branchPrediction;
+    logic               jump_EX;
+    logic               pipelineFlush;
+    logic               pipelineFlushIF;
+    rvDefs::word_t      branchAddress;
+    logic               loadPCValue;
+    logic               branchCorrectionJALR;
+    logic               JALRCorrection;
+    logic               addressCorrectionFlag;
+    rvDefs::word_t      JALRAddress;
+    rvDefs::word_t      addressCorrectionLoad;
+    rvDefs::word_t      branchImmediate;
+    rvDefs::branch_op_t branchPredictionOp;
 
     /******************************
      * IF/ID pipeline register outputs  (ID stage inputs)
@@ -153,16 +167,10 @@ module Core
     rvDefs::word_t           registerWriteData;
 
     /******************************
-     * AHB Lite Bus signals
+     * AHB Lite Bus Stall Signal
      ******************************/
-    rvDefs::mem_addr_t  instructionAddressAHB;
-    rvDefs::mem_addr_t  nextInstructionAddress;
-    rvDefs::word_t      branchImmediate;
-    rvDefs::branch_op_t branchPredictionOp;
-    logic               HREADY_dbus;
-    logic               HREADY_ibus;
-    logic               pipelineStall;
-    assign              pipelineStall = !(HREADY_dbus && HREADY_ibus);
+    logic  pipelineStall;
+    assign pipelineStall = !(HREADY_dbus && HREADY_ibus);
 
     /******************************
      * modules
@@ -182,16 +190,8 @@ module Core
 
     assign nextInstructionAddress = loadPCValue ? branchAddress : instructionAddress;
     assign addressCorrectionLoad = branchCorrection ? branchCorrectionAddress : JALRAddress;
-
-    AHBInstructionManager InstructionManager (
-        .clk                    (CLK),
-        .resetN                 (RSTN),
-        .nextInstructionFlag    (PC_update & IFID_write),
-        .instructionAddress     (nextInstructionAddress),
-        .instruction            (instruction),
-        .instructionAddressAHB  (instructionAddressAHB),
-        .HREADY_ibus            (HREADY_ibus)
-    );
+    assign nextInstructionFlag = PC_update & IFID_write;
+    
 
     BranchDecoder BranchDecoder (
         .instruction(instruction),
@@ -238,8 +238,6 @@ module Core
         .storeLoad              (storeLoad),
         .branchOp               (branchOp),
         .branchNegate           (branchNegate),
-        // .jump                   (jump),
-        // .JALR                   (JALR_flag),
         .writeSource            (writeSource)
     );
 
@@ -267,7 +265,7 @@ module Core
     BranchAddresser branchAddresser (
         .PCAddress          (instructionAddressAHB),
         .offset             (branchImmediate),
-        .opcode             (instruction[6:0]),
+        .opcode             (rvDefs::opcode_t'(instruction[6:0])),
         .BranchAddress      (branchAddress)
     );
 
@@ -504,8 +502,6 @@ module Core
         .storeLoad_MEM          (storeLoad_MEM),
         .address_MEM            (address_MEM)
     );
-    rvDefs::word_t           writeDataLSU;
-    logic [31:0]             addressLSU;
 
     // LSU — operates in MEM stage
     LSU lsu(
@@ -524,18 +520,6 @@ module Core
         .memToRegData   (memToRegData),
         .writeDataLSU   (writeDataLSU),
         .addressLSU     (addressLSU)
-    );
-
-    AHBDataManager DataManager (
-        .clk(CLK),
-        .resetN(RSTN),
-        .memWrite(memWrite),
-        .memRead(memRead),
-        .address(addressLSU),
-        .writeData(writeDataLSU),
-        .memSize(memSize),
-	    .readData(memReadData),
-        .HREADY_dbus(HREADY_dbus)
     );
 
     // MEM/WB pipeline register
@@ -573,10 +557,6 @@ module Core
             default:
                 registerWriteData = 32'b0;
         endcase
-
-        // if (writeSource_WB == rvDefs::WRITE_SRC_PC && JALR_WB) begin
-        //     registerWriteData = instructionAddress_WB;
-        // end
 
         if (rd_WB == 5'b000) begin
             registerWriteData = 32'b0;

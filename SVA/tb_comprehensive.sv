@@ -33,7 +33,7 @@ module tb_comprehensive();
     // -------------------------------------------------------------------------
     // DUT
     // -------------------------------------------------------------------------
-    Core dut (
+    RV32I_subsystem dut (
         .CLK             (CLK),
         .RSTN            (RSTN),
         .stall           (stall)
@@ -120,7 +120,7 @@ module tb_comprehensive();
     // =========================================================================
 
     // Alias for the register file (adjust path to match your hierarchy)
-    `define RF tb_comprehensive.dut.xRegisterFile.registers
+    `define RF tb_comprehensive.dut.RV32I.xRegisterFile.registers
     `define dmem_bus tb_comprehensive.dut.DataManager.data_manager.sub_gen[0].subordinate
 
     initial begin

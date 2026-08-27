@@ -32,6 +32,7 @@ RTL/EXMEM_register.sv
 RTL/LSU.sv
 RTL/MEMWB_register.sv
 RTL/Core.sv
+RTL/RV32I_subsystem.sv
 
 // SVA and Verification Files
 SVA/AHB_lite_checker.sv

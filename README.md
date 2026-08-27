@@ -55,25 +55,13 @@ A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog
 
 ---
 
-## Pipeline Block Diagram
-
-```text
-+---------------+     +---------------+     +---------------+     +---------------+     +---------------+
-| Fetch (IF)    | --> | Decode (ID)   | --> | Execute (EX)  | --> | Memory (MEM)  | --> | Writeback(WB) |
-+---------------+     +---------------+     +---------------+     +---------------+     +---------------+
-        |                     |                     |                     |                     |
-     [I-AHB Bus]         [2-Bit Branch]       [ALU / Shift]         [D-AHB Bus]           [RegFile Write]
-      Instruction         Predictor &          Target & LSB          Load / Store          RAW Forwarding
-      Fetch               Forwarding           Masking (~1)             Access                Commit
-```
-
----
 
 ## Hardware Modules
 
 | Module Name | Description |
 | :--- | :--- |
-| Core | Top-level module encapsulating pipeline stages, hazard control, and bus adapters.|
+| RV32I_subsystem | Top-level module connecting the RV32I core with the AHB-Lite bus adapters for instruction and data memory. |
+| Core | RV32I processor Module encapsulating pipeline stages, and hazard control.|
 | HazardDetection | Detects load-use hazards and manages pipeline stalls and bubble inserts. |
 | ForwardingUnit | Determines which operand source is used for the Execution stage from the register file, EX/MEM, or MEM/WB stages. |
 | BranchPredictor | 2-bit saturation counter for branch prediction and Execution stage branch correction for mispredictions. |
