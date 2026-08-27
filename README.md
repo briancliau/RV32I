@@ -58,13 +58,13 @@ A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog
 ## Pipeline Block Diagram
 
 ```text
-       +---------------+     +---------------+     +---------------+     +---------------+     +---------------+
---->   | Fetch (IF)    | --> | Decode (ID)   | --> | Execute (EX)  | --> | Memory (MEM)  | --> | Writeback(WB) |
-       +---------------+     +---------------+     +---------------+     +---------------+     +---------------+
-               |                     |                     |                     |                     |
-            [I-AHB Bus]         [2-Bit Branch]       [ALU / Shift]         [D-AHB Bus]           [RegFile Write]
-             Instruction         Predictor &          Target & LSB          Load / Store          RAW Forwarding
-             Fetch               Forwarding           Masking (~1)             Access                Commit
++---------------+     +---------------+     +---------------+     +---------------+     +---------------+
+| Fetch (IF)    | --> | Decode (ID)   | --> | Execute (EX)  | --> | Memory (MEM)  | --> | Writeback(WB) |
++---------------+     +---------------+     +---------------+     +---------------+     +---------------+
+        |                     |                     |                     |                     |
+     [I-AHB Bus]         [2-Bit Branch]       [ALU / Shift]         [D-AHB Bus]           [RegFile Write]
+      Instruction         Predictor &          Target & LSB          Load / Store          RAW Forwarding
+      Fetch               Forwarding           Masking (~1)             Access                Commit
 ```
 
 ---
