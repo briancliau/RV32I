@@ -122,6 +122,25 @@ The testbench drives binary-encoded RISC-V instruction sequences through simulat
 
 ---
 
+## Synthesis & Implementation Metrics
+
+Pre-technology mapping hardware metrics extracted via Yosys synthesis:
+
+* **Sequential Elements:** 637 Flip-Flops
+  * 551 $\text{DFFE}$ with enable & active-low reset
+  * 75 $\text{DFF}$ with active-low reset
+  * 11 $\text{DFFE}$ with enable & active-low set
+* **Combinational Logic:** 4,606 generic logic cells (AND, OR, XOR, MUX, NOT)
+* **Memory Blocks:** 3 inferable memory arrays (Register File / Buffers)
+
+## Prerequisites
+
+* **EDA Toolchain:**
+  * [OpenLane 2](https://github.com/The-OpenROAD-Project/OpenLane)
+  * [Yosys](https://github.com/YosysHQ/yosys) (or `yowasp-yosys` via PyPI)
+  * [Verilator](https://www.veripool.org/verilator/) (for linting & RTL simulation)
+* **PDK:** SkyWater 130nm (`sky130A`)
+
 ## Build and Simulation
 
 ```bash
@@ -130,11 +149,15 @@ cd RV32I
 
 # Execute the comprehensive testbench with all edge cases:
 # Compile design and testbench
-verilator --binary --timing --top --trace tb_comprehensive -f filelist.f
+verilator --binary --timing --trace --top  tb_comprehensive -f filelist.f
 
 # Run simulation
 ./obj_dir/Vtb_comprehensive
 
 # View waveform
 gtkwave core_test_comprehensive.vcd
+
+# Run Yosys
+cd yosys
+yosys synth.ys
 ```

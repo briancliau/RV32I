@@ -13,7 +13,7 @@ module RV32I_subsystem (
     input  logic CLK,
     input  logic RSTN,
     input  logic stall,
-    output logic LED,
+    output logic LED
 );    
     // Instruction AHB Bus Signals
     logic               nextInstructionFlag;

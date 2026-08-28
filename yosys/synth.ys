@@ -1,0 +1,30 @@
+# 1. Read design files
+read_slang -f filelist.f
+
+# 2. Build hierarchy
+hierarchy -top RV32I_subsystem
+
+# 3. Process processes, switches, and flip-flops
+proc
+opt
+
+# 4. CRITICAL: Flatten all submodules into RV32I_subsystem
+flatten
+
+# 5. Extract and map memories
+memory -nomap
+opt
+
+# 6. Map to generic gate netlist (gives ABC real logic gates to analyze)
+techmap
+abc -g MUX,AND,OR,XOR
+opt_clean
+
+# 7. Find the true critical path (combinational gate depth)
+ltp
+
+# 8. Print total gate counts across the flattened CPU
+stat
+
+# 9. Output netlist
+write_verilog core_gate_level.v

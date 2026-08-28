@@ -8,7 +8,7 @@ import AHB_pkg::*;
 // Description : AHB_Lite byte-addressable data memory module with dynamic wait 
 //               states.
 // Dependencies: AHB_pkg.sv
-// Target      : Testbench Verification (Synthesis in yosis directory)
+// Target      : Synthesis
 //------------------------------------------------------------------------------
 module AHB_dmem_subordinate #(
     parameter int unsigned ADDR_BITS = 12, 
@@ -27,6 +27,7 @@ module AHB_dmem_subordinate #(
     output logic        HREADYOUT,
     output logic [31:0] HRDATA
 );    
+   
     // AHB Address Phase Latching
     logic                   addr_accept;
     logic                   dataphase_valid;
@@ -42,7 +43,7 @@ module AHB_dmem_subordinate #(
     assign word_base = {addr_reg[ADDR_BITS-1:2], 2'b00};
 
     // Byte wide memory array (2^ADDR_BITS bytes total)
-    logic [7:0] dmem [2**ADDR_BITS];
+    (* ram_style = "block" *) logic [7:0] dmem [2**ADDR_BITS];
     logic [3:0] byte_en;
 
     // Wait State Counter Logic
@@ -99,49 +100,4 @@ module AHB_dmem_subordinate #(
     assign HRESP = 1'b0;
     assign HREADYOUT = (wait_count == '0);
     assign HRDATA    = {dmem[word_base + 3], dmem[word_base + 2], dmem[word_base + 1], dmem[word_base]};
-
-    // Preload default memory for testbench verification
-    always_comb begin
-        // Word 32: 0xDEADBEEF
-        dmem [131] = 8'hDE;
-        dmem [130] = 8'hAD;
-        dmem [129] = 8'hBE;
-        dmem [128] = 8'hEF;
-        // Word 33: 0x12345678
-        dmem [135] = 8'h12;
-        dmem [134] = 8'h34;
-        dmem [133] = 8'h56;
-        dmem [132] = 8'h78;
-        // Word 128 @ byte address 0x200
-        // Initially zero.
-        // Used by Phase N / Phase P.
-        dmem[515] = 8'h00;
-        dmem[514] = 8'h00;
-        dmem[513] = 8'h00;
-        dmem[512] = 8'h00;
-
-        // Word 129 @ byte address 0x204
-        // Source for Phase O.
-        dmem[519] = 8'hCA;
-        dmem[518] = 8'hFE;
-        dmem[517] = 8'hBA;
-        dmem[516] = 8'hBE;
-
-        // Word 130 @ byte address 0x208
-        // Destination for Phase O.
-        // Initially zero.
-        dmem[523] = 8'h00;
-        dmem[522] = 8'h00;
-        dmem[521] = 8'h00;
-        dmem[520] = 8'h00;
-
-        // Word 131 @ byte address 0x20C
-        // Phase U byte-lane test.
-        // Initial value = 0x11223344.
-        dmem[527] = 8'h11;
-        dmem[526] = 8'h22;
-        dmem[525] = 8'h33;
-        dmem[524] = 8'h44;
-    end
-
 endmodule

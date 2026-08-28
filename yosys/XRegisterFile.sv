@@ -1,14 +1,5 @@
 `timescale 1ns/1ps
 
-//------------------------------------------------------------------------------
-// Author      : Brian Liau (brian.liau@tufts.edu)
-// File        : XRegisterFile.sv
-// Design Unit : XRegisterFile
-// Description : 32x32-bit Integer Register File for RISC-V. Hardwires x0 to 0
-//               and supports internal write-to-read forwarding (bypass).
-// Dependencies: rvDefs.sv
-// Target      : Synthesis
-//------------------------------------------------------------------------------
 module XRegisterFile
 (
     input  logic               clk,         // apply register writes if any on rising edge
@@ -20,16 +11,14 @@ module XRegisterFile
     output rvDefs::xreg_t      read1Data,   // data read from read1Reg
     output rvDefs::xreg_t      read2Data    // data read from read2Reg
 );
-    // Array for registers x1 to x31 (x0 hardwired to 0)
+
     rvDefs::xreg_t registers [1 : rvDefs::XREG_COUNT - 1]; // x[0] doesnt actually need to exist (hardwired)
 
-    // Synchronous Write on Rising Clock Edge
     always_ff @(negedge clk) begin
-        if (writeEnable && (writeReg != rvDefs::xreg_addr_t'(0)))
+        if (writeEnable && (writeReg != rvDefs::xreg_addr_t'(0))) // cant write to register x0
             registers[writeReg] <= writeData;
     end
 
-    // Asynchronous Read Port 2 with Internal WB-to-ID Forwarding (Bypass)
     assign read1Data = (read1Reg == rvDefs::xreg_addr_t'(0)) ? (rvDefs::xreg_t'(0)) : (registers[read1Reg]);
     assign read2Data = (read2Reg == rvDefs::xreg_addr_t'(0)) ? (rvDefs::xreg_t'(0)) : (registers[read2Reg]);
 
