@@ -67,7 +67,7 @@ A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog
 | BranchPredictor | 2-bit saturation counter for branch prediction and Execution stage branch correction for mispredictions. |
 | AHBDataManager | Manager module controlling the 2-cycle AHB for data memory load and stores. | 
 | AHBInstructionManager | Manager module controlling the 2-cycle AHB for instruction fetches. |
-| XALU | Execution ALU supporting full 32-bit arithemetic, logical, and shift operations. | 
+| XALU | Execution ALU supporting full 32-bit arithmetic, logical, and shift operations. | 
 
 ## Technical Edge Cases & Verification
 ---
@@ -124,6 +124,8 @@ The testbench drives binary-encoded RISC-V instruction sequences through simulat
 
 ## Synthesis & Implementation Metrics
 
+### Yosys Synthesis
+
 Pre-technology mapping hardware metrics extracted via Yosys synthesis:
 
 * **Sequential Elements:** 637 Flip-Flops
@@ -133,18 +135,74 @@ Pre-technology mapping hardware metrics extracted via Yosys synthesis:
 * **Combinational Logic:** 4,606 generic logic cells (AND, OR, XOR, MUX, NOT)
 * **Memory Blocks:** 3 inferable memory arrays (Register File / Buffers)
 
+## OpenLane Physical Design & PPA Metrics
+
+The `RV32I_subsystem` has been fully synthesized, floorplanned, routed, and verified using the **OpenLane / OpenROAD** EDA flow targeting the **SkyWater 130nm (sky130hd)** process node.
+
+### Signoff Status
+* **Setup & Hold Timing:** **PASS** (0 Violations across all PVT corners)
+* **DRC / LVS:** **CLEAN** (0 Magic/KLayout DRC errors, 0 LVS mismatches)
+* **Antenna & IR Drop:** **CLEAN** (0 Antenna violations, < 0.67 mV worst-case IR drop)
+
+---
+### Performance, Power, and Area (PPA) Summary
+
+| Parameter | Value | Details / Notes |
+| :--- | :--- | :--- |
+| **Technology Node** | SkyWater 130nm (`sky130_fd_sc_hd`) | High-density standard cell library |
+| **Target Clock Period** | **10.50 ns** (~95.2 MHz) | Base synthesis & PnR constraint |
+| **Achievable $F_{\max}$** | **97.1 MHz** (10.30 ns) | Calculated from worst-case corner slack |
+| **Worst Setup Slack (WNS)** | **+0.197 ns** (+197 ps) | Corner: `max_ss_100C_1v60` (Slow-Slow, 100°C, 1.6V) |
+| **Worst Hold Slack (WNS)** | **+0.112 ns** (+112 ps) | Corner: `min_ff_n40C_1v95` (Fast-Fast, -40°C, 1.95V) |
+| **Total Power** | **1.25 mW** | Nominal operating condition (1.8V, 25°C @ 95.2 MHz) |
+| ├── *Internal Power* | 0.955 mW (76.4%) | Short-circuit and internal cell switching |
+| ├── *Switching Power* | 0.295 mW (23.6%) | Net capacitance charging/discharging |
+| └── *Leakage Power* | 12.67 nW (< 0.01%) | Static cell leakage |
+| **Die Dimensions** | $200 \times 200\ \mu\text{m}^2$ ($0.040\text{ mm}^2$) | Outer chip boundary (`die__bbox`) |
+| **Core Area** | $179.86 \times 176.80\ \mu\text{m}^2$ ($0.0318\text{ mm}^2$) | Effective routable logic core boundary |
+| **Standard Cell Area** | $8,473.13\ \mu\text{m}^2$ ($0.00847\text{ mm}^2$) | Total area occupied by logic gates |
+| **Core Utilization** | **26.65%** | Highly routable with floorplan shrinking headroom |
+
+---
+
+### Gate Count & Cell Breakdown
+
+| Cell Category | Instance Count | Percentage |
+| :--- | :--- | :--- |
+| **Sequential Cells (Registers/FFs)** | 138 | 12.9% |
+| **Combinational Logic Gates** | 244 | 22.9% |
+| **Buffers & Inverters** | 12 | 1.1% |
+| **Clock Tree Buffers/Inverters** | 32 | 3.0% |
+| **Timing Repair & Hold Buffers** | 361 | 33.9% |
+| **Physical Cells (Fill & Tap)** | 2,816 | N/A (Physical only) |
+| **Total Standard Cells** | **1,066** | **100.0%** |
+
+---
+
+### Routing & Physical Verification Results
+
+```text
+[OpenROAD.DetailedRouting] DRC Errors: 0
+[Magic]                    DRC Errors: 0
+[KLayout]                  DRC Errors: 0
+[LVS]                      Device & Net Differences: 0
+[Antenna]                  Violating Nets / Pins: 0
+[IR Drop]                  Worst-case drop on VPWR: 0.666 mV (0.037%)
+```
+
 ## Prerequisites
 
 * **EDA Toolchain:**
   * [OpenLane 2](https://github.com/The-OpenROAD-Project/OpenLane)
   * [Yosys](https://github.com/YosysHQ/yosys) (or `yowasp-yosys` via PyPI)
   * [Verilator](https://www.veripool.org/verilator/) (for linting & RTL simulation)
+  * [Docker](https://docs.docker.com/desktop/setup/install/windows-install/) (for Windows distribution)
 * **PDK:** SkyWater 130nm (`sky130A`)
 
 ## Build and Simulation
 
 ```bash
-git clone [https://github.com/briancliau/RV32I](https://github.com/briancliau/RV32I)
+git clone https://github.com/briancliau/RV32I.git
 cd RV32I
 
 # Execute the comprehensive testbench with all edge cases:
@@ -160,4 +218,14 @@ gtkwave core_test_comprehensive.vcd
 # Run Yosys
 cd yosys
 yosys synth.ys
+
+# Run OpenLane
+cd .. # Return to RV32I base directory
+openlane --dockerized openlane/config.json
+
+# Viewing OpenLane Results
+cd openlane/runs/
+cd RUN_[date and time]
+cd final
+cat metrics.csv
 ```

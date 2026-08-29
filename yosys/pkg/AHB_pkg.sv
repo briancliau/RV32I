@@ -1,4 +1,3 @@
-`timescale 1ns/1ps
 `ifndef AHB_PKG_SV
 `define AHB_PKG_SV
 

@@ -1,4 +1,3 @@
-`timescale 1ns/1ps
 `ifndef RVDEFS_SV
 `define RVDEFS_SV
 

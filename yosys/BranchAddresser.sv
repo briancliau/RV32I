@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-import rvDefs::*;
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : BranchAddresser.sv
@@ -16,6 +13,8 @@ module BranchAddresser (
     input  rvDefs::opcode_t opcode,
     output logic [31:0]     BranchAddress
 );
+    import rvDefs::*;
+
     // Calculate PC-relative target address for JAL and Branch instructions
     always_comb begin
         case (opcode)

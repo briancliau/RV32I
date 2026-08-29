@@ -1,55 +1,54 @@
-`timescale 1ns/1ps
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : RV32I_subsystem.sv
 // Design Unit : RV32I_subsystem
-// Description : Top-level subsystem connecting Core, AHBInstructionManager, 
-//               and AHBDataManager to external AHB-Lite buses.
-// Dependencies: rvDefs.sv
-// Target      : Synthesis
-//------------------------------------------------------------------------------
+// Description : Top-level subsystem preserving Core and AHB Managers.
+//------------------------------------------------------------------------------    
 module RV32I_subsystem (
     input  logic CLK,
     input  logic RSTN,
     input  logic stall,
     output logic LED
-);    
-    // Instruction AHB Bus Signals
-    logic               nextInstructionFlag;
-    rvDefs::mem_addr_t  nextInstructionAddress;
-    rvDefs::word_t      instruction;
-    rvDefs::mem_addr_t  instructionAddressAHB;
-    logic               HREADY_ibus;
+);
 
-    // Data AHB Bus Signal
-    logic                 memWrite;
-    logic                 memRead;
-    rvDefs::mem_addr_t    addressLSU;
-    rvDefs::word_t        writeDataLSU;
-    logic [2:0]           memSize;
-    rvDefs::word_t        memReadData;
-    logic                 HREADY_dbus;
+    // Keep attributes on Instruction AHB Bus Interconnects
+    (* keep = "true" *) logic               nextInstructionFlag;
+    (* keep = "true" *) rvDefs::mem_addr_t  nextInstructionAddress;
+    (* keep = "true" *) rvDefs::word_t      instruction;
+    (* keep = "true" *) rvDefs::mem_addr_t  instructionAddressAHB;
+    (* keep = "true" *) logic               HREADY_ibus;
 
+    // Keep attributes on Data AHB Bus Interconnects
+    (* keep = "true" *) logic               memWrite;
+    (* keep = "true" *) logic               memRead;
+    (* keep = "true" *) rvDefs::mem_addr_t  addressLSU;
+    (* keep = "true" *) rvDefs::word_t      writeDataLSU;
+    (* keep = "true" *) logic [2:0]         memSize;
+    (* keep = "true" *) rvDefs::word_t      memReadData;
+    (* keep = "true" *) logic               HREADY_dbus;
+
+    // Preserve the Core hierarchy
+    (* keep_hierarchy = "true" *)
     Core RV32I (
-        .CLK                        (CLK),
-        .RSTN                       (RSTN),
-        .stall                      (stall),              
-        .nextInstructionFlag        (nextInstructionFlag),
-        .nextInstructionAddress     (nextInstructionAddress),
-        .instruction                (instruction),
-        .instructionAddressAHB      (instructionAddressAHB),
-        .HREADY_ibus                (HREADY_ibus),
-        .memWrite                   (memWrite),
-        .memRead                    (memRead),
-        .addressLSU                 (addressLSU),
-        .writeDataLSU               (writeDataLSU),
-        .memSize                    (memSize),
-        .memReadData                (memReadData),
-        .HREADY_dbus                (HREADY_dbus)
+        .CLK                    (CLK),
+        .RSTN                   (RSTN),
+        .stall                  (stall),             
+        .nextInstructionFlag    (nextInstructionFlag),
+        .nextInstructionAddress (nextInstructionAddress),
+        .instruction            (instruction),
+        .instructionAddressAHB  (instructionAddressAHB),
+        .HREADY_ibus            (HREADY_ibus),
+        .memWrite               (memWrite),
+        .memRead                (memRead),
+        .addressLSU             (addressLSU),
+        .writeDataLSU           (writeDataLSU),
+        .memSize                (memSize),
+        .memReadData            (memReadData),
+        .HREADY_dbus            (HREADY_dbus)
     );
 
-    // Initialize Instruction AHB Bus
+    // Preserve the Instruction Manager hierarchy
+    (* keep_hierarchy = "true" *)
     AHBInstructionManager InstructionManager (
         .clk                    (CLK),
         .resetN                 (RSTN),
@@ -60,18 +59,20 @@ module RV32I_subsystem (
         .HREADY_ibus            (HREADY_ibus)
     );
 
-    // Initialize Data AHB Bus
+    // Preserve the Data Manager hierarchy
+    (* keep_hierarchy = "true" *)
     AHBDataManager DataManager (
-        .clk(CLK),
-        .resetN(RSTN),
-        .memWrite(memWrite),
-        .memRead(memRead),
-        .address(addressLSU),
-        .writeData(writeDataLSU),
-        .memSize(memSize),
-	    .readData(memReadData),
-        .HREADY_dbus(HREADY_dbus)
+        .clk                    (CLK),
+        .resetN                 (RSTN),
+        .memWrite               (memWrite),
+        .memRead                (memRead),
+        .address                (addressLSU),
+        .writeData              (writeDataLSU),
+        .memSize                (memSize),
+        .readData               (memReadData),
+        .HREADY_dbus            (HREADY_dbus)
     );
 
     assign LED = nextInstructionFlag;
+
 endmodule

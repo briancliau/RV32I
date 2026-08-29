@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-import AHB_pkg::*;
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : AHB_data_top.sv
@@ -23,6 +20,8 @@ module AHB_data_top
     output logic        HRESP,
     output logic        HREADY
 );
+    import AHB_pkg::*;
+
     // Interconnect output signals
     logic [NTOTAL_D-1:0]  HSELx;
 

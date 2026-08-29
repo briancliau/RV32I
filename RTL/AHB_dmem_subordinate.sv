@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-import AHB_pkg::*;
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : AHB_dmem_subordinate.sv
@@ -27,6 +24,8 @@ module AHB_dmem_subordinate #(
     output logic        HREADYOUT,
     output logic [31:0] HRDATA
 );    
+    import AHB_pkg::*;
+
     // AHB Address Phase Latching
     logic                   addr_accept;
     logic                   dataphase_valid;

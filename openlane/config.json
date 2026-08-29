@@ -1,0 +1,11 @@
+{
+  "DESIGN_NAME": "RV32I_subsystem",
+  "VERILOG_FILES": [
+    "dir::../yosys/core_gate_level.v"
+  ],
+  "CLOCK_PORT": "CLK",
+  "CLOCK_PERIOD": 10.5,
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [0, 0, 200, 200],
+  "CORE_AREA": [10, 10, 190, 190]
+}

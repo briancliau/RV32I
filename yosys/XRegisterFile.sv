@@ -1,5 +1,12 @@
-`timescale 1ns/1ps
-
+//------------------------------------------------------------------------------
+// Author      : Brian Liau (brian.liau@tufts.edu)
+// File        : XRegisterFile.sv
+// Design Unit : XRegisterFile
+// Description : 32x32-bit Integer Register File for RISC-V. Hardwires x0 to 0
+//               and supports internal write-to-read forwarding (bypass).
+// Dependencies: rvDefs.sv
+// Target      : Synthesis
+//------------------------------------------------------------------------------
 module XRegisterFile
 (
     input  logic               clk,         // apply register writes if any on rising edge

@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : AHB_dmem_default_subordinate.sv

@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-import AHB_pkg::*;
-
 //------------------------------------------------------------------------------
 // Author      : Brian Liau (brian.liau@tufts.edu)
 // File        : AHB_dmem_interconnect.sv
@@ -11,17 +8,19 @@ import AHB_pkg::*;
 //------------------------------------------------------------------------------
 module AHB_dmem_interconnect 
 (
-    input  logic                HCLK,
-    input  logic                HRESETn,
-    input  logic [31:0]         HADDR,
-    input  logic [31:0]         HRDATA_S [NTOTAL_D],
-    input  logic [NTOTAL_D-1:0] HREADYOUT_S,
-    input  logic [NTOTAL_D-1:0] HRESP_S,
-    output logic [31:0]         HRDATA,
-    output logic                HREADY,
-    output logic                HRESP,
-    output logic [NTOTAL_D-1:0] HSELx
+    input  logic                            HCLK,
+    input  logic                            HRESETn,
+    input  logic [31:0]                     HADDR,
+    input  logic [31:0]                     HRDATA_S [AHB_pkg::NTOTAL_D],
+    input  logic [AHB_pkg::NTOTAL_D-1:0]    HREADYOUT_S,
+    input  logic [AHB_pkg::NTOTAL_D-1:0]    HRESP_S,
+    output logic [31:0]                     HRDATA,
+    output logic                            HREADY,
+    output logic                            HRESP,
+    output logic [AHB_pkg::NTOTAL_D-1:0]    HSELx
 );    
+    import AHB_pkg::*;
+
     // Subordinate selection signals
     logic [NUM_SUBORDINATES_D-1:0]      hsel_subordinates;
     logic [NTOTAL_D-1:0]                hsel_comb;

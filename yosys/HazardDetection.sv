@@ -1,3 +1,12 @@
+//------------------------------------------------------------------------------
+// Author      : Brian Liau (brian.liau@tufts.edu)
+// File        : HazardDetection.sv
+// Design Unit : HazardDetection
+// Description : Pipeline hazard detection unit. Enforces a 2-cycle stall for 
+//               all Load-Use data hazards to accommodate AHB bus read latency.
+// Dependencies: rvDefs.sv
+// Target      : Synthesis
+//------------------------------------------------------------------------------
 module HazardDetection (
     input  logic clk,
     input  logic resetN,
