@@ -77,4 +77,5 @@ module AHB_imem_subordinate #(
     assign HRESP = 1'b0;
     assign HREADYOUT = (wait_count == '0);
     assign HRDATA    = {imem[word_base + 3], imem[word_base + 2], imem[word_base + 1], imem[word_base]};
+
 endmodule

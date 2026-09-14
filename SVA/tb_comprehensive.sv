@@ -15,6 +15,7 @@ module tb_comprehensive();
     logic CLK;
     logic RSTN;
     logic stall;
+    logic LED;
 
     // -------------------------------------------------------------------------
     // Simulated Memories  (2 KB / 512 words each)
@@ -36,7 +37,8 @@ module tb_comprehensive();
     RV32I_subsystem dut (
         .CLK             (CLK),
         .RSTN            (RSTN),
-        .stall           (stall)
+        .stall           (stall),
+        .LED             (LED)
     );
 
     // -------------------------------------------------------------------------
@@ -281,7 +283,7 @@ module tb_comprehensive();
         // PHASE P - Load -> Branch Hazard
         // ========================================================================
         $display("\n--- Phase P: Load -> Branch Hazard ---");
-        repeat (12) @(posedge CLK);
+        repeat (17) @(posedge CLK);
         $display("[%0t] Branch Hazard.", $time);
         check_reg("P:x3_target", 3, `RF[3], 32'd42); // Target executed (42), traitors skipped
 
@@ -292,7 +294,7 @@ module tb_comprehensive();
         // PHASE Q - ALU -> JALR Hazard
         // ========================================================================
         $display("\n--- Phase Q: ALU -> JALR Hazard ---");
-        repeat (12) @(posedge CLK);
+        repeat (7) @(posedge CLK);
         $display("[%0t] ALU to JALR Hazard.", $time);
         check_reg("Q:x1_link", 1, `RF[1], 32'h00000288); // PC + 4 link address
         check_reg("Q:x5_target", 5, `RF[5], 32'd42);
@@ -369,7 +371,7 @@ module tb_comprehensive();
     // Waveform Dump
     // -------------------------------------------------------------------------
     initial begin
-        $dumpfile("core_test_comprehensive.vcd");
+        $dumpfile("core1_test_comprehensive.vcd");
         $dumpvars(0, tb_comprehensive);
     end
 

@@ -640,7 +640,7 @@ module AHB_imem_subordinate #(
         imem[610] = 8'h50;
         imem[611] = 8'h05;
 
-        // bne x1, x4, +12
+        // beq x1, x4, +12
         // Must be taken: 0x55 == 0x55
         imem[612] = 8'h63;
         imem[613] = 8'h96;

@@ -1,23 +1,23 @@
 # High-Performance RV32I 5-Stage Pipelined Processor Core
 
-A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog. Designed with a classic 5-stage pipeline, this architecture features dual AHB-Lite bus interfaces for a Harvard-style memory system, full dynamic branch prediction, and comprehensive hazard detection and data forwarding logic to maximize instruction throughput (IPC).
+A 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog and synthesized through the OpenLane physical design flow. Designed with a classic 5-stage pipeline, this architecture features dual AHB-Lite bus interfaces for a Harvard-style memory system, full dynamic branch prediction, and comprehensive hazard detection and data forwarding logic to maximize instruction throughput (IPC).
 
 ---
 
 ## Architectural Highlights
 
 * **ISA Compliance:** RV32I Base Integer Instruction Set with full support for control/status and byte/halfword memory operations.
-* **5-Stage Pipeline Architecture:** Standard **IF** $\rightarrow$ **ID** $\rightarrow$ **EX** $\rightarrow$ **MEM** $\rightarrow$ **WB** pipeline designed for maximum operating frequency.
+* **5-Stage Pipeline Architecture:** Standard **IF** $\rightarrow$ **ID** $\rightarrow$ **EX** $\rightarrow$ **MEM** $\rightarrow$ **WB** pipeline designed for maximum throughput.
 * **Dual AHB-Lite Bus Interfaces (Harvard Architecture):**
   * **I-AHB Master:** Dedicated instruction memory bus utilizing the pipelined address/data phase to achieve 1 instruction per cycle peak throughput.
   * **D-AHB Master:** Dedicated data memory bus utilizing the pipelined address/data phase to manage byte (`SB`/`LB`), halfword (`SH`/`LH`), and word (`SW`/`LW`) transfers.
 * **Dynamic Branch Prediction:** 
-  * 2-Bit Saturating Counter state machine (`Strongly Not Taken` $\leftrightarrow$ `Strongly Taken`) to minimize control hazards.
-  * Zero-cycle penalty for correctly predicted branches; automated pipeline flushes on mispredictions.
+  * 2-Bit Saturating Counter branch prediction with four prediction states (`Strongly Not Taken` $\leftrightarrow$ `Strongly Taken`).
+  * No misprediction penalty for correctly predicted branches; automated pipeline flushes on mispredictions.
 * **Advanced Hazard Handling:**
   * **Data Forwarding Unit:** Resolves Read-After-Write (RAW) data hazards (EX $\rightarrow$ EX, MEM $\rightarrow$ EX) without stalling the pipeline.
   * **Hazard Detection Unit:** Identifies non-forwardable Load-Use dependencies and injects hardware stalls.
-  * **X0 Register Guarding:** Hardware suppression of writes to `x0` to maintain the zero-register.
+  * **X0 Register Guarding:** Supresses writes to `x0` to maintain zero=register. 
 
 ## System Architecture
 
@@ -52,16 +52,14 @@ A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog
 * **Zero-Stall ALU Forwarding:** Bypasses late-written register values directly from `EX/MEM` and `MEM/WB` pipeline registers back to the ALU input MUXes (`Forward A/B`).
 * **AHB-Aware Load Stalls:** Intercepts `Load-Use` hazards by monitoring `ID/EX.MemRead` and dynamic instruction opcodes to stretch pipeline holds across multi-cycle bus transactions.
 
-
 ---
-
 
 ## Hardware Modules
 
 | Module Name | Description |
 | :--- | :--- |
 | RV32I_subsystem | Top-level module connecting the RV32I core with the AHB-Lite bus adapters for instruction and data memory. |
-| Core | RV32I processor Module encapsulating pipeline stages, and hazard control.|
+| Core | RV32I processor Module encapsulating pipeline stages, and hazard control. |
 | HazardDetection | Detects load-use hazards and manages pipeline stalls and bubble inserts. |
 | ForwardingUnit | Determines which operand source is used for the Execution stage from the register file, EX/MEM, or MEM/WB stages. |
 | BranchPredictor | 2-bit saturation counter for branch prediction and Execution stage branch correction for mispredictions. |
@@ -70,6 +68,7 @@ A synthesized, 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog
 | XALU | Execution ALU supporting full 32-bit arithmetic, logical, and shift operations. | 
 
 ## Technical Edge Cases & Verification
+
 ---
 
 ### Verification Strategy
@@ -128,21 +127,33 @@ The testbench drives binary-encoded RISC-V instruction sequences through simulat
 
 Pre-technology mapping hardware metrics extracted via Yosys synthesis:
 
-* **Sequential Elements:** 637 Flip-Flops
-  * 551 $\text{DFFE}$ with enable & active-low reset
-  * 75 $\text{DFF}$ with active-low reset
-  * 11 $\text{DFFE}$ with enable & active-low set
-* **Combinational Logic:** 4,606 generic logic cells (AND, OR, XOR, MUX, NOT)
-* **Memory Blocks:** 3 inferable memory arrays (Register File / Buffers)
+#### Area & Cell Breakdown
+* **Total Cells:** 5,495
+* **Sequential Elements:** 622 Flip-Flops ($\text{\_ALDFF\_PN\_}$ with active-low reset / async load)
+* **Combinational Logic:** 4,870 cells
+  * **AND:** 2,284
+  * **OR:** 1,521
+  * **MUX:** 434
+  * **NOT:** 362
+  * **XOR:** 269
+* **Memory Blocks:** 3 inferable memory arrays ($\$mem\_v2$, including the register file and data manager buffers)
+
+#### Netlist Metrics
+* **Wires:** 4,725
+* **Wire Bits:** 9,055
+* **Public Wires:** 395
+* **Public Wire Bits:** 4,340
+* **Ports:** 4
+* **Port Bits:** 4
 
 ## OpenLane Physical Design & PPA Metrics
 
 The `RV32I_subsystem` has been fully synthesized, floorplanned, routed, and verified using the **OpenLane / OpenROAD** EDA flow targeting the **SkyWater 130nm (sky130hd)** process node.
 
 ### Signoff Status
-* **Setup & Hold Timing:** **PASS** (0 Violations across all PVT corners)
+* **Setup & Hold Timing:** **PASS** (0 Setup/Hold violations across all corners)
 * **DRC / LVS:** **CLEAN** (0 Magic/KLayout DRC errors, 0 LVS mismatches)
-* **Antenna & IR Drop:** **CLEAN** (0 Antenna violations, < 0.67 mV worst-case IR drop)
+* **Antenna & IR Drop:** **CLEAN** (0 Antenna violations, ~0.61 mV worst-case IR drop)
 
 ---
 ### Performance, Power, and Area (PPA) Summary
@@ -151,17 +162,17 @@ The `RV32I_subsystem` has been fully synthesized, floorplanned, routed, and veri
 | :--- | :--- | :--- |
 | **Technology Node** | SkyWater 130nm (`sky130_fd_sc_hd`) | High-density standard cell library |
 | **Target Clock Period** | **10.50 ns** (~95.2 MHz) | Base synthesis & PnR constraint |
-| **Achievable $F_{\max}$** | **97.1 MHz** (10.30 ns) | Calculated from worst-case corner slack |
-| **Worst Setup Slack (WNS)** | **+0.197 ns** (+197 ps) | Corner: `max_ss_100C_1v60` (Slow-Slow, 100°C, 1.6V) |
-| **Worst Hold Slack (WNS)** | **+0.112 ns** (+112 ps) | Corner: `min_ff_n40C_1v95` (Fast-Fast, -40°C, 1.95V) |
-| **Total Power** | **1.25 mW** | Nominal operating condition (1.8V, 25°C @ 95.2 MHz) |
-| ├── *Internal Power* | 0.955 mW (76.4%) | Short-circuit and internal cell switching |
-| ├── *Switching Power* | 0.295 mW (23.6%) | Net capacitance charging/discharging |
-| └── *Leakage Power* | 12.67 nW (< 0.01%) | Static cell leakage |
+| **Achievable $F_{\max}$** | **96.12 MHz** (10.404 ns) | Calculated from worst-case corner slack ($T_{\min} = 10.50 - (-0.404)$ ns) |
+| **Worst Setup Slack (WNS)** | **-0.404 ns** (-404 ps) | Corner: `max_ss_100C_1v60` (6 Violations total across worst-case paths) |
+| **Worst Hold Slack (WNS)** | **+0.112 ns** (+112 ps) | Corner: `min_ff_n40C_1v95` (0 Violations across all corners) |
+| **Total Power** | **1.30 mW** (0.00130 W) | Nominal operating condition (1.8V, 25°C @ nominal switching) |
+| ├── *Internal Power* | 0.992 mW (76.6%) | Short-circuit and internal cell switching |
+| ├── *Switching Power* | 0.304 mW (23.4%) | Net capacitance charging/discharging |
+| └── *Leakage Power* | 12.83 nW (< 0.01%) | Static cell leakage |
 | **Die Dimensions** | $200 \times 200\ \mu\text{m}^2$ ($0.040\text{ mm}^2$) | Outer chip boundary (`die__bbox`) |
 | **Core Area** | $179.86 \times 176.80\ \mu\text{m}^2$ ($0.0318\text{ mm}^2$) | Effective routable logic core boundary |
-| **Standard Cell Area** | $8,473.13\ \mu\text{m}^2$ ($0.00847\text{ mm}^2$) | Total area occupied by logic gates |
-| **Core Utilization** | **26.65%** | Highly routable with floorplan shrinking headroom |
+| **Standard Cell Area** | $8,489.39\ \mu\text{m}^2$ ($0.00849\text{ mm}^2$) | Total area occupied by logic gates |
+| **Core Utilization** | **26.70%** | Standard cell area relative to core area |
 
 ---
 
@@ -170,24 +181,25 @@ The `RV32I_subsystem` has been fully synthesized, floorplanned, routed, and veri
 | Cell Category | Instance Count | Percentage |
 | :--- | :--- | :--- |
 | **Sequential Cells (Registers/FFs)** | 138 | 12.9% |
-| **Combinational Logic Gates** | 244 | 22.9% |
-| **Buffers & Inverters** | 12 | 1.1% |
-| **Clock Tree Buffers/Inverters** | 32 | 3.0% |
-| **Timing Repair & Hold Buffers** | 361 | 33.9% |
-| **Physical Cells (Fill & Tap)** | 2,816 | N/A (Physical only) |
-| **Total Standard Cells** | **1,066** | **100.0%** |
+| **Multi-Input Combinational Cells** | 249 | 23.3% |
+| **Inverters & Standard Buffers** | 11 | 1.0% |
+| **Clock Tree Buffers/Inverters** | 32 | 3.0% (21 Buffers, 11 Inverters) |
+| **Timing Repair & Hold Buffers** | 361 | 33.8% (202 Repair, 159 Hold) |
+| **Physical Cells (Fill & Tap)** | 2,868 | N/A (2,433 Fill, 435 Tap) |
+| **Total Standard Cells** | **1,067** | **100.0%** |
 
 ---
 
 ### Routing & Physical Verification Results
 
 ```text
-[OpenROAD.DetailedRouting] DRC Errors: 0
+[OpenROAD.DetailedRouting] DRC Errors: 0 (Resolved at iteration 4)
 [Magic]                    DRC Errors: 0
 [KLayout]                  DRC Errors: 0
 [LVS]                      Device & Net Differences: 0
 [Antenna]                  Violating Nets / Pins: 0
-[IR Drop]                  Worst-case drop on VPWR: 0.666 mV (0.037%)
+[IR Drop]                  Worst-case drop on VPWR: 0.607 mV (0.034%)
+[Wirelength]               Total Routed Wirelength: 15,385 µm (4,050 Single-cut Vias)
 ```
 
 ## Prerequisites
@@ -221,6 +233,7 @@ yosys synth.ys
 
 # Run OpenLane
 cd .. # Return to RV32I base directory
+sv2v RTL/pkg/AHB_pkg.sv RTL/*.sv > combined_design.v
 openlane --dockerized openlane/config.json
 
 # Viewing OpenLane Results

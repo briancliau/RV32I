@@ -9,26 +9,43 @@
 //------------------------------------------------------------------------------
 module XRegisterFile
 (
-    input  logic               clk,         // apply register writes if any on rising edge
-    input  logic               writeEnable, // enable writing on clock edge
-    input  rvDefs::xreg_addr_t read1Reg,    // address of register to send to read port 1
-    input  rvDefs::xreg_addr_t read2Reg,    // address of register to send to read port 2
-    input  rvDefs::xreg_addr_t writeReg,    // address of register to write to
-    input  rvDefs::xreg_t      writeData,   // data to write to register
-    output rvDefs::xreg_t      read1Data,   // data read from read1Reg
-    output rvDefs::xreg_t      read2Data    // data read from read2Reg
+    input  logic                clk,         
+    input  logic                writeEnable, 
+    input  rvDefs::xreg_addr_t  read1Reg,    
+    input  rvDefs::xreg_addr_t  read2Reg,    
+    input  rvDefs::xreg_addr_t  writeReg,    
+    input  rvDefs::xreg_t       writeData,   
+    output rvDefs::xreg_t       read1Data,   
+    output rvDefs::xreg_t       read2Data    
 );
-    // Array for registers x1 to x31 (x0 hardwired to 0)
-    rvDefs::xreg_t registers [1 : rvDefs::XREG_COUNT - 1]; // x[0] doesnt actually need to exist (hardwired)
+    // Array for registers x1 to x31
+    rvDefs::xreg_t registers [1 : rvDefs::XREG_COUNT - 1]; 
 
     // Synchronous Write on Rising Clock Edge
-    always_ff @(negedge clk) begin
+    always_ff @(posedge clk) begin
         if (writeEnable && (writeReg != rvDefs::xreg_addr_t'(0)))
             registers[writeReg] <= writeData;
     end
 
-    // Asynchronous Read Port 2 with Internal WB-to-ID Forwarding (Bypass)
-    assign read1Data = (read1Reg == rvDefs::xreg_addr_t'(0)) ? (rvDefs::xreg_t'(0)) : (registers[read1Reg]);
-    assign read2Data = (read2Reg == rvDefs::xreg_addr_t'(0)) ? (rvDefs::xreg_t'(0)) : (registers[read2Reg]);
+    // Combinational Read with Internal Write-Through Forwarding
+    always_comb begin
+        // Read Port 1
+        if (read1Reg == rvDefs::xreg_addr_t'(0)) begin
+            read1Data = rvDefs::xreg_t'(0);
+        end else if (writeEnable && (read1Reg == writeReg)) begin
+            read1Data = writeData; // Internal Forwarding (WB -> ID)
+        end else begin
+            read1Data = registers[read1Reg];
+        end
+
+        // Read Port 2
+        if (read2Reg == rvDefs::xreg_addr_t'(0)) begin
+            read2Data = rvDefs::xreg_t'(0);
+        end else if (writeEnable && (read2Reg == writeReg)) begin
+            read2Data = writeData; // Internal Forwarding (WB -> ID)
+        end else begin
+            read2Data = registers[read2Reg];
+        end
+    end
 
 endmodule
