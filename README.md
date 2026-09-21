@@ -233,7 +233,6 @@ yosys synth.ys
 
 # Run OpenLane
 cd .. # Return to RV32I base directory
-sv2v RTL/pkg/AHB_pkg.sv RTL/*.sv > combined_design.v
 openlane --dockerized openlane/config.json
 
 # Viewing OpenLane Results
