@@ -1,0 +1,9 @@
+# Run from the repo root:  yosys -m slang openlane/asic/sv2v.ys
+#   (or: yowasp-yosys openlane/asic/sv2v.ys)
+# Converts the SystemVerilog RTL into plain RTL-level Verilog for OpenLane2.
+# NO flatten / techmap / abc here: OpenLane does the real sky130 synthesis.
+read_slang -f openlane/asic/filelist_asic.f --top RV32I_core_asic
+hierarchy -check -top RV32I_core_asic
+proc
+opt_clean
+write_verilog -noattr openlane/asic/RV32I_core_asic.v

@@ -1,0 +1,14 @@
+{
+  "DESIGN_NAME": "RV32I_core_asic",
+  "VERILOG_FILES": ["dir::RV32I_core_asic.v"],
+
+  "CLOCK_PORT": "CLK",
+  "CLOCK_PERIOD": 20.0,
+
+  "FP_SIZING": "relative",
+  "FP_CORE_UTIL": 40,
+  "PL_TARGET_DENSITY_PCT": 50,
+
+  "PL_RESIZER_SETUP_SLACK_MARGIN": 7.0,
+  "GRT_RESIZER_SETUP_SLACK_MARGIN": 7.0
+}

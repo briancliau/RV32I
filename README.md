@@ -108,86 +108,76 @@ The testbench drives RISC-V instruction sequences through simulated Instruction 
 
 ## Synthesis & Implementation Metrics
 
-### Yosys Synthesis
+### ASIC Hardening Top (`RV32I_core_asic`)
 
-Pre-technology mapping hardware metrics extracted via Yosys synthesis:
+The ASIC flow uses a dedicated top, `RTL/asic/RV32I_core_asic.sv`, separate from the FPGA/UPduino top (`RV32I_subsystem`):
 
-#### Area & Cell Breakdown
-* **Total Cells:** 5,495
-* **Sequential Elements:** 622 Flip-Flops
-* **Combinational Logic:** 4,870 cells
-  * **AND:** 2,284
-  * **OR:** 1,521
-  * **MUX:** 434
-  * **NOT:** 362
-  * **XOR:** 269
-* **Memory Blocks:** 3 inferable memory arrays
+* **Hardened block** = RV32I core + AHB-Lite instruction and data managers (`RTL/asic/AHB*ManagerPort.sv`).
+* **Both AHB-Lite buses are top-level ports** (`I_*` and `D_*`). Instruction and data memories sit outside the block, as SRAM macros would in a real SoC.
+* Every architectural result is observable at a pin, so synthesis cannot remove the core as dead logic.
 
-#### Netlist Metrics
-* **Wires:** 4,725
-* **Wire Bits:** 9,055
-* **Public Wires:** 395
-* **Public Wire Bits:** 4,340
-* **Ports:** 4
-* **Port Bits:** 4
+> **Note on earlier results:** A previous revision reported 91.71 MHz / 8,489 µm² / 1.30 mW for `RV32I_subsystem`. That top's only output (an LED) did not depend on the core, and its instruction memory had no contents at synthesis time, so most of the core was optimized away (138 flip-flops survived). Those numbers did not describe the full design and have been replaced below.
+
+### Yosys Synthesis (generic cells, `RV32I_core_asic`)
+
+* **Total Cells:** 9,245
+* **Sequential Elements:** 1,575 Flip-Flops
+  * Register file (x1–x31): 992
+  * Pipeline registers, PC, branch predictor, AHB managers: 583
+* **MUX cells:** 1,675
 
 ## OpenLane Physical Design & PPA Metrics
 
-The `RV32I_subsystem` has been fully synthesized, floorplanned, routed, and verified using the **OpenLane / OpenROAD** EDA flow targeting the **SkyWater 130nm (sky130hd)** process node.
+`RV32I_core_asic` was synthesized, placed, routed, and verified with **OpenLane 2 / OpenROAD** on **SkyWater 130nm (`sky130_fd_sc_hd`)**.
 
 ### Signoff Status
-* **Setup & Hold Timing:** **PASS** (0 Setup/Hold violations across all corners)
-* **DRC / LVS:** **CLEAN** (0 Magic/KLayout DRC errors, 0 LVS mismatches)
-* **Antenna & IR Drop:** **CLEAN** (0 Antenna violations, ~0.61 mV worst-case IR drop)
-
+* **Hold Timing:** **PASS** at all corners
+* **Setup Timing:** **PASS** at typical and fast corners; **FAIL at slow corner** (WNS −0.93 ns at `max_ss_100C_1v60`). Timing closure is in progress (see *Critical Path* below).
+* **Routing DRC:** **CLEAN** (0 errors, resolved at detailed-routing iteration 6)
+* **LVS:** **CLEAN** (0 errors)
 
 ### Performance, Power, and Area (PPA) Summary
 
 | Parameter | Value | Details / Notes |
 | :--- | :--- | :--- |
 | **Technology Node** | SkyWater 130nm (`sky130_fd_sc_hd`) | High-density standard cell library |
-| **Target Clock Period** | **11.00 ns** | Base synthesis & PnR constraint |
-| **Achievable $F_{\max}$** | **91.71 MHz** | Calculated from worst-case corner slack ($T_{\min} = 11.00 - 0.096 = 10.904$ ns) |
-| **Worst Setup Slack (WNS)** | **0.096 ns** (96 ps) | Corner: `max_ss_100C_1v60` |
-| **Worst Hold Slack (WHS)** | **+0.112 ns** (+112 ps) | Corner: `min_ff_n40C_1v95` (0 Violations across all corners) |
-| **Total Power** | **1.30 mW** (0.00130 W) | Nominal operating condition (1.8V, 25°C @ nominal switching) |
-| Internal Power | 0.992 mW (76.6%) | Short-circuit and internal cell switching |
-| Switching Power | 0.304 mW (23.4%) | Net capacitance charging/discharging |
-| Leakage Power | 12.83 nW (< 0.01%) | Static cell leakage |
-| **Die Dimensions** | $200 \times 200\ \mu\text{m}^2$ ($0.040\text{ mm}^2$) | Outer chip boundary (`die__bbox`) |
-| **Core Area** | $179.86 \times 176.80\ \mu\text{m}^2$ ($0.0318\text{ mm}^2$) | Effective routable logic core boundary |
-| **Standard Cell Area** | $8,489.39\ \mu\text{m}^2$ ($0.00849\text{ mm}^2$) | Total area occupied by logic gates |
-| **Core Utilization** | **26.70%** | Standard cell area relative to core area |
+| **Target Clock Period** | **20.00 ns** (50 MHz) | `PL/GRT_RESIZER_SETUP_SLACK_MARGIN` = 7 ns |
+| **Achievable $F_{\max}$, slow corner** | **≈ 47.8 MHz** | $T_{\min} = 20.00 + 0.93 = 20.93$ ns (`max_ss_100C_1v60`) |
+| **Achievable $F_{\max}$, typical corner** | **≈ 67.3 MHz** | $T_{\min} = 20.00 - 5.15 = 14.85$ ns (`max_tt_025C_1v80`) |
+| **Worst Setup Slack (WNS)** | **−0.932 ns** | Corner: `max_ss_100C_1v60` |
+| **Worst Hold Slack (WHS)** | **+0.105 ns** | Corner: `min_ff_n40C_1v95` |
+| **Total Power** | **16.99 mW** | OpenLane default activity, 20 ns clock |
+| **Die Area** | $252{,}804\ \mu\text{m}^2$ (≈ $503 \times 503\ \mu\text{m}$) | Sized from `FP_CORE_UTIL` = 40% |
+| **Standard Cell Area** | $121{,}409\ \mu\text{m}^2$ | |
+| **Utilization** | **51.6%** | Standard-cell area relative to core area |
 
-### Gate Count & Cell Breakdown
+### Critical Path (slow corner)
 
-| Cell Category | Instance Count | Percentage |
-| :--- | :--- | :--- |
-| **Sequential Cells (Registers/FFs)** | 138 | 12.9% |
-| **Multi-Input Combinational Cells** | 249 | 23.3% |
-| **Inverters & Standard Buffers** | 11 | 1.0% |
-| **Clock Tree Buffers/Inverters** | 32 | 3.0% (21 Buffers, 11 Inverters) |
-| **Timing Repair & Hold Buffers** | 361 | 33.8% (202 Repair, 159 Hold) |
-| **Physical Cells (Fill & Tap)** | 2,868 | N/A (2,433 Fill, 435 Tap) |
-| **Total Standard Cells** | **1,067** | **100.0%** |
+The worst path is a **combinational input-to-output path**, `I_HREADY` → `I_HADDR[30]`:
+
+1. `I_HREADY` selects the incoming instruction (`HRDATA`) in the instruction manager.
+2. The instruction is pre-decoded in IF by `BranchDecoder`.
+3. `BranchAddresser` computes the branch/JAL target (PC + immediate); the adder carry chain dominates the path.
+4. The target is driven out as the next fetch address on `I_HADDR`.
+
+This is the cost of **zero-bubble branch prediction**: a fetched instruction's target is computed and issued in the same cycle it arrives. OpenLane's default I/O constraints also budget 20% of the clock for external logic at each end of the path.
+
+**Planned fix:** predict from the IF/ID pipeline register instead of the raw bus data, so the path starts at a flip-flop. This trades one extra bubble on predicted-taken branches for a shorter clock period.
 
 ### Signoff Results
 
 ```text
-[OpenROAD.DetailedRouting] DRC Errors: 0 (Resolved at iteration 4)
-[Magic]                    DRC Errors: 0
-[KLayout]                  DRC Errors: 0
-[LVS]                      Device & Net Differences: 0
-[Antenna]                  Violating Nets / Pins: 0
-[IR Drop]                  Worst-case drop on VPWR: 0.607 mV (0.034%)
-[Wirelength]               Total Routed Wirelength: 15,385 µm (4,050 Single-cut Vias)
+[OpenROAD.DetailedRouting] DRC Errors: 0 (Resolved at iteration 6)
+[LVS]                      Errors: 0
+[STA] Setup WNS (ss_100C_1v60): -0.932 ns
+[STA] Hold  WHS (ff_n40C_1v95): +0.105 ns
 ```
 
 ## Prerequisites
 
 * **EDA Toolchain:**
-  * [OpenLane 2](https://github.com/The-OpenROAD-Project/OpenLane)
-  * [Yosys](https://github.com/YosysHQ/yosys) (or `yowasp-yosys` via PyPI)
+  * [OpenLane 2](https://github.com/efabless/openlane2)
+  * [Yosys](https://github.com/YosysHQ/yosys) with the `slang` SystemVerilog frontend (or `yowasp-yosys` via PyPI)
   * [Verilator](https://www.veripool.org/verilator/) (for linting & RTL simulation)
   * [Docker](https://docs.docker.com/desktop/setup/install/windows-install/) (for Windows distribution)
 * **PDK:** SkyWater 130nm (`sky130A`)
@@ -202,9 +192,8 @@ cd RV32I
 
 ### Simulation
 ```bash
-# Execute the comprehensive testbench with all edge cases:
 # Compile design and testbench
-verilator --binary --timing --trace --top  tb_comprehensive -f filelist.f
+verilator --binary --timing --trace --top tb_comprehensive -f filelist.f
 
 # Run simulation
 ./obj_dir/Vtb_comprehensive
@@ -213,24 +202,20 @@ verilator --binary --timing --trace --top  tb_comprehensive -f filelist.f
 gtkwave core_test_comprehensive.vcd
 ```
 
-### Synthesis
+### Physical Layout and Signoff (ASIC)
 
 ```bash
-# Run Yosys
-cd yosys
-yosys synth.ys
-```
+# 1. Convert SystemVerilog RTL to plain Verilog for OpenLane
+#    (only needed after RTL changes; RV32I_core_asic.v is checked in)
+yosys openlane/asic/sv2v.ys
 
-### Physical Layout and Signoff
+# 2. Run OpenLane
+openlane --dockerized openlane/asic/config.json
 
-```bash 
-# Run OpenLane
-cd .. # Return to RV32I base directory
-openlane --dockerized openlane/config.json
-
-# Viewing OpenLane Results
-cd openlane/runs/
-cd RUN_[date and time]
-cd final
+# 3. View results
+cd openlane/asic/runs/RUN_[date and time]/final
 cat metrics.csv
+
+# Sanity check: flip-flop count should be ~1,575
+grep -cE "sky130_fd_sc_hd__(df|edf|sdf)" nl/RV32I_core_asic.nl.v
 ```
