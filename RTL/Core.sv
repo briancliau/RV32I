@@ -167,7 +167,7 @@ module Core
         .enable                 (PC_update & IFID_write & !pipelineStall),
         .branchPrediction       (loadPCValue),
         .branchCorrection       (addressCorrectionFlag),
-        .addrLoad               (branchAddress),
+        .addrLoad               (branchAddress + 32'd4),
         .branchCorrectionLoad   (addressCorrectionLoad),
         .addrOut                (instructionAddress)
     );
@@ -179,16 +179,14 @@ module Core
     assign loadPCValue = (jump && !JALR_flag) || branchPrediction;
     
     // Pipeline stall 
-    assign pipelineFlush = addressCorrectionFlag || JALR_pipelineFlush;
-
-    // Branch decoder instantiation
-    BranchDecoder BranchDecoder (
-        .instruction(instruction),
-        .branchImmediate(branchImmediate),
-        .branchOp(branchPredictionOp),
-        .jump(jump),       
-        .JALR(JALR_flag)
-    );
+    assign pipelineFlush = addressCorrectionFlag || JALRCorrection || branchCorrectionJALR;
+    // Option A: squash the sequential instruction fetched behind a branch/JAL predicted in ID
+    logic flush_d;
+    always_ff @(posedge CLK or negedge RSTN)
+        if (!RSTN) flush_d <= 1'b0;
+        else if (!pipelineStall) flush_d <= pipelineFlush;
+    // The wrong-path word fetched in the cycle of an EX correction arrives one cycle later: kill it too
+    assign pipelineFlushIF = pipelineFlush || flush_d || (loadPCValue && IFID_write && PC_update && !pipelineStall);
 
     // IF/ID pipeline register instantiation
     IFID_register IFID_stage(
@@ -196,7 +194,7 @@ module Core
         .resetN                     (RSTN),
         .pipelineStall              (pipelineStall),
         .IFID_write                 (IFID_write),
-        .flush                      (pipelineFlush),
+        .flush                      (pipelineFlushIF),
         .instructionAddress_IF      (instructionAddressAHB),
         .instructionAddress_ID      (instructionAddress_ID),
         .instruction_IF             (instruction),
@@ -242,20 +240,29 @@ module Core
         .read2Data  (read2Data)
     );
 
-    // Branch predictor unit instantiation
+    // Branch Decoder - Decodes Instructions for Branches or JAL
+    BranchDecoder BranchDecoder (
+        .instruction(instruction_ID),
+        .branchImmediate(branchImmediate),
+        .branchOp(branchPredictionOp),
+        .jump(jump),       
+        .JALR(JALR_flag)
+    );
+
+    // Branch predictor unit
     BranchPredictor branchPredictor (
         .clk                (CLK),
         .resetN             (RSTN),
-        .branchTaken        (branchTaken_EX),
         .branchRequested    (branchPredictionOp != rvDefs::BRANCH_OP_NONE),
+        .branchResolved     ((branchOp_EX != rvDefs::BRANCH_OP_NONE) && !pipelineStall),
+        .branchTaken        (branchTaken_EX),
         .branchPrediction   (branchPrediction)
     );
 
-    // Branch addresser instantiation
     BranchAddresser branchAddresser (
-        .PCAddress          (instructionAddressAHB),
+        .PCAddress          (instructionAddress_ID),
         .offset             (branchImmediate),
-        .opcode             (rvDefs::opcode_t'(instruction[6:0])),
+        .opcode             (rvDefs::opcode_t'(instruction_ID[6:0])),
         .BranchAddress      (branchAddress)
     );
 
@@ -317,7 +324,7 @@ module Core
         .instruction_ID             (instruction_ID),
         .jump_ID                    (jump),
         .JALR_ID                    (JALR_flag),
-        .branchPrediction_ID        (branchPrediction_ID),
+        .branchPrediction_ID        (branchPrediction),
         .branchPrediction_EX        (branchPrediction_EX),
         .immediateXaluSecondary_EX  (immediateXaluSecondary_EX),
         .writeSource_EX             (writeSource_EX),

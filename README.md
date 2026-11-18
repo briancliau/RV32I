@@ -10,9 +10,10 @@ A 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog and synthesi
   * **I-AHB Master:** Instruction memory bus utilizing the pipelined address/data phase to achieve 1 instruction per cycle.
   * **D-AHB Master:** Data memory bus utilizing the pipelined address/data phase to handle transfers for the data given by the Load-Store unit.
 * **Branch Prediction:** 
-  * 2-Bit Saturating Counter branch prediction (`Strongly Not Taken` $\leftrightarrow$ `Strongly Taken`).
-  * No misprediction penalty for correctly predicted branches.
-  * Automatic pipeline flushes on mispredictions with a two-cycle penalty.
+  * 2-Bit Saturating Counter branch prediction (`Strongly Not Taken` $\leftrightarrow$ `Strongly Taken`), trained when each branch resolves in `EX`.
+  * Prediction is made in the **ID stage from the registered instruction (IF/ID register)**, so no combinational path runs from the instruction bus to the address bus.
+  * One bubble for a predicted-taken branch or `JAL`; no penalty for correctly predicted not-taken branches.
+  * Mispredictions are resolved in `EX`, which flushes the younger instructions and redirects the fetch.
 * **Hazard Handling:**
   * **Data Forwarding Unit:** Resolves Read-After-Write (RAW) data hazards (EX $\rightarrow$ EX, MEM $\rightarrow$ EX).
   * **Hazard Detection Unit:** Identifies non-forwardable Load-Use dependencies and injects hardware stalls.
@@ -34,9 +35,9 @@ A 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog and synthesi
 ![Branch Prediction Block Diagram](docs/Branch_Prediction.png)
 *Figure 2: Branch prediction and JALR target resolution paths.*
 
-* **2-Bit Branch Predictor:** Operates in the `IF/ID` stages using a saturating counter state machine to minimize branch penalty on correct predictions.
+* **2-Bit Branch Predictor:** Looks up the prediction in the `ID` stage, using a saturating counter that is updated when the branch resolves in `EX`. A predicted-taken branch or `JAL` redirects the fetch address from `ID` and squashes the sequential instruction fetched behind it (one bubble). See [Design Decision](#design-decision-where-to-make-the-branch-prediction) for why prediction is made in `ID`.
 * **Resolution Paths:**
-  * **Branch Target (EX Stage):** Evaluated in `EX` to correct branch mispredictions and limit branch misprediction penalties to 2 cycles.
+  * **Branch Target (EX Stage):** Evaluated in `EX` to correct branch mispredictions by flushing the pipeline and refetching.
   * **JALR Target (EX Stage):** Evaluated using forwarded ALU results and bit-masking before driving target selection based on correction multiplexers.
 
 ### 3. Hazard Detection & Forwarding Unit
@@ -55,7 +56,8 @@ A 32-bit RISC-V (RV32I) processor core implemented in SystemVerilog and synthesi
 | Core | Implements pipeline stages, hazard control, and branch prediction. |
 | HazardDetection | Detects load-use hazards and manages pipeline stalls and bubble inserts. |
 | ForwardingUnit | Determines which operand source is used for the execution stage from the register file, EX/MEM, or MEM/WB stages. |
-| BranchPredictor | 2-bit saturation counter for branch prediction and execution stage branch correction for mispredictions. |
+| BranchPredictor | 2-bit saturating counter. Predicts in `ID` and trains when the branch resolves in `EX`. |
+| BranchDecoder / BranchAddresser | Decode branch and `JAL` instructions in `ID` and compute their targets from the IF/ID register. |
 | AHBDataManager | Controls 2-cycle AHB-Lite transactions for data memory load and stores. | 
 | AHBInstructionManager | Controls 2-cycle AHB-Lite transactions for instruction fetches. |
 | XALU | Execution ALU supporting full 32-bit arithmetic, logical, and shift operations. | 
@@ -80,9 +82,11 @@ The `RV32I_core_sva` module runs concurrently during simulation to enforce RISC-
   * **Flush Execution:** Ensures pipeline flushes correctly insert a `NOP` into the `ID` stage and clear control write enables in `EX` (`writeEnable_EX == 0`).
   * **X-Propagation Detection:** Flags `$isunknown` (X/Z state) errors on register destination or write-data buses during active write-back cycles.
 
-### Directed Testbench (`tb_comprehensive`)
+### Directed Testbench (`tb_core_asic`)
 
-The testbench drives RISC-V instruction sequences through simulated Instruction (`imem`) and Data (`dmem`) memories across dedicated execution phases:
+The testbench runs the hardened block (`RV32I_core_asic`: core plus AHB-Lite managers) against a memory system that sits outside it, as an SoC would. The program is loaded from `test_core_asic.mem` and the initial data from `data_memory.hex`; run the simulation from the folder containing both. Checks are **event-based**: each phase waits for a specific instruction to retire and then checks the results, so the testbench does not depend on pipeline timing. All **97 checks pass**.
+
+The testbench covers these execution phases:
 
 #### Core Instruction Suite & Arithmetic Edge Cases
 * **Logical & Bitwise Operations (Phase A):** Validates signed/unsigned shifts, immediate handling, and bitwise logic (`AND`, `OR`, `XOR`, `SRLI`, `SLL`).
@@ -104,7 +108,15 @@ The testbench drives RISC-V instruction sequences through simulated Instruction 
 
 #### System Robustness
 * **Mid-Execution Reset (Phases M & N):** Asserts reset mid-flight during execution to ensure pipeline registers clear without introducing unknown state (`X` propagation), while preserving core state across soft resets.
-* **Watchdog Timeout:** Enforces a maximum cycle limit (`#5000`) to trap unexpected infinite loops or core lockups.
+* **Watchdog Timeout:** A 20,000-cycle watchdog and a per-event timeout (2,000 cycles) trap infinite loops and lost control flow.
+
+#### Wrong-Path and Redirect Tests (Phases V–AB)
+Each phase uses a *canary* register or memory word that only a wrong-path instruction can write, so a leaked instruction is caught even if a later instruction overwrites the target.
+* **Wrong-path store and jump behind a `JAL` (V, W):** Instructions behind a taken `JAL` must not store or redirect.
+* **Redirect around load stalls (X):** A `JAL` right after a load and after a load-use stall must execute its target exactly once.
+* **Branches at a `JAL` target (Y):** Taken and not-taken branches immediately at a jump target.
+* **CPI kernel (Z):** A 20-iteration loop of 61 instructions used for CPI measurement.
+* **PC tag after a load-to-store stall (AA)** and **`JALR` redirect with a jump in IF (AB).**
 
 ## Synthesis & Implementation Metrics
 
@@ -116,23 +128,21 @@ The ASIC flow uses a dedicated top, `RTL/asic/RV32I_core_asic.sv`, separate from
 * **Both AHB-Lite buses are top-level ports** (`I_*` and `D_*`). Instruction and data memories sit outside the block, as SRAM macros would in a real SoC.
 * Every architectural result is observable at a pin, so synthesis cannot remove the core as dead logic.
 
-> **Note on earlier results:** A previous revision reported 91.71 MHz / 8,489 µm² / 1.30 mW for `RV32I_subsystem`. That top's only output (an LED) did not depend on the core, and its instruction memory had no contents at synthesis time, so most of the core was optimized away (138 flip-flops survived). Those numbers did not describe the full design and have been replaced below.
+> **Note on earlier results:** A previous revision reported 91.71 MHz / 8,489 µm² / 1.30 mW for `RV32I_subsystem`. That top's only output (an LED) did not depend on the core's results, so synthesis removed most of the core as dead logic. Those numbers did not describe the full design and have been replaced below.
 
-### Yosys Synthesis (generic cells, `RV32I_core_asic`)
+### Yosys Synthesis (`RV32I_core_asic`)
 
-* **Total Cells:** 9,245
-* **Sequential Elements:** 1,575 Flip-Flops
+* **Sequential Elements:** 1,572 flip-flops (flattened, memories mapped to flip-flops)
   * Register file (x1–x31): 992
-  * Pipeline registers, PC, branch predictor, AHB managers: 583
-* **MUX cells:** 1,675
+  * Pipeline registers, PC, branch predictor, AHB managers: 580
 
 ## OpenLane Physical Design & PPA Metrics
 
 `RV32I_core_asic` was synthesized, placed, routed, and verified with **OpenLane 2 / OpenROAD** on **SkyWater 130nm (`sky130_fd_sc_hd`)**.
 
-### Signoff Status
-* **Hold Timing:** **PASS** at all corners
-* **Setup Timing:** **PASS** at typical and fast corners; **FAIL at slow corner** (WNS −0.93 ns at `max_ss_100C_1v60`). Timing closure is in progress (see *Critical Path* below).
+### Signoff Status (19 ns target)
+* **Setup Timing:** **PASS** at all corners. Slow corner (`max_ss_100C_1v60`) WNS **+0.180 ns**.
+* **Hold Timing:** **PASS** at all corners. Worst hold slack **+0.061 ns** (`min_ff_n40C_1v95`).
 * **Routing DRC:** **CLEAN** (0 errors, resolved at detailed-routing iteration 6)
 * **LVS:** **CLEAN** (0 errors)
 
@@ -141,37 +151,68 @@ The ASIC flow uses a dedicated top, `RTL/asic/RV32I_core_asic.sv`, separate from
 | Parameter | Value | Details / Notes |
 | :--- | :--- | :--- |
 | **Technology Node** | SkyWater 130nm (`sky130_fd_sc_hd`) | High-density standard cell library |
-| **Target Clock Period** | **20.00 ns** (50 MHz) | `PL/GRT_RESIZER_SETUP_SLACK_MARGIN` = 7 ns |
-| **Achievable $F_{\max}$, slow corner** | **≈ 47.8 MHz** | $T_{\min} = 20.00 + 0.93 = 20.93$ ns (`max_ss_100C_1v60`) |
-| **Achievable $F_{\max}$, typical corner** | **≈ 67.3 MHz** | $T_{\min} = 20.00 - 5.15 = 14.85$ ns (`max_tt_025C_1v80`) |
-| **Worst Setup Slack (WNS)** | **−0.932 ns** | Corner: `max_ss_100C_1v60` |
-| **Worst Hold Slack (WHS)** | **+0.105 ns** | Corner: `min_ff_n40C_1v95` |
-| **Total Power** | **16.99 mW** | OpenLane default activity, 20 ns clock |
-| **Die Area** | $252{,}804\ \mu\text{m}^2$ (≈ $503 \times 503\ \mu\text{m}$) | Sized from `FP_CORE_UTIL` = 40% |
-| **Standard Cell Area** | $121{,}409\ \mu\text{m}^2$ | |
+| **Clock Period (met)** | **19.00 ns** (≈ 52.6 MHz) | Signoff pass at the slow corner. `PL/GRT_RESIZER_SETUP_SLACK_MARGIN` = 7 ns, default I/O constraints |
+| **$F_{\max}$, slow corner** | **between 52.6 and 54.1 MHz** | 19 ns passes (+0.180 ns); 18.5 ns fails (−0.118 ns) |
+| **$F_{\max}$, typical corner (estimate)** | ≈ 81.5 MHz | $T = 19.00 - 6.73 = 12.27$ ns (`max_tt_025C_1v80`), estimated from slack at the 19 ns target |
+| **$F_{\max}$, fast corner (estimate)** | ≈ 93.4 MHz | $T = 19.00 - 8.30 = 10.70$ ns (`max_ff_n40C_1v95`), estimated from slack at the 19 ns target |
+| **Worst Setup Slack (WNS)** | **+0.180 ns** | Corner: `max_ss_100C_1v60` |
+| **Worst Hold Slack (WHS)** | **+0.061 ns** | Corner: `min_ff_n40C_1v95` |
+| **Total Power** | **24.13 mW** | OpenLane default activity, 19 ns clock |
+| **Die Area** | $253{,}066\ \mu\text{m}^2$ | Sized from `FP_CORE_UTIL` = 40% |
+| **Standard Cell Area** | $121{,}692\ \mu\text{m}^2$ | |
 | **Utilization** | **51.6%** | Standard-cell area relative to core area |
 
-### Critical Path (slow corner)
-
-The worst path is a **combinational input-to-output path**, `I_HREADY` → `I_HADDR[30]`:
-
-1. `I_HREADY` selects the incoming instruction (`HRDATA`) in the instruction manager.
-2. The instruction is pre-decoded in IF by `BranchDecoder`.
-3. `BranchAddresser` computes the branch/JAL target (PC + immediate); the adder carry chain dominates the path.
-4. The target is driven out as the next fetch address on `I_HADDR`.
-
-This is the cost of **zero-bubble branch prediction**: a fetched instruction's target is computed and issued in the same cycle it arrives. OpenLane's default I/O constraints also budget 20% of the clock for external logic at each end of the path.
-
-**Planned fix:** predict from the IF/ID pipeline register instead of the raw bus data, so the path starts at a flip-flop. This trades one extra bubble on predicted-taken branches for a shorter clock period.
+The slow-corner $F_{\max}$ is bracketed by two real runs (a pass at 19 ns and a failure at 18.5 ns). The typical and fast corner figures are extrapolated from slack and are estimates only.
 
 ### Signoff Results
 
 ```text
 [OpenROAD.DetailedRouting] DRC Errors: 0 (Resolved at iteration 6)
 [LVS]                      Errors: 0
-[STA] Setup WNS (ss_100C_1v60): -0.932 ns
-[STA] Hold  WHS (ff_n40C_1v95): +0.105 ns
+[STA] Setup WNS (ss_100C_1v60): +0.180 ns
+[STA] Hold  WHS (ff_n40C_1v95): +0.061 ns
 ```
+
+## Design Decision: Where to Make the Branch Prediction
+
+The core was built in two versions that differ only in where the branch prediction is made. Both were taken through the same testbench and the same OpenLane flow (`config.json`, slack margins, default I/O constraints) so the trade-off could be measured rather than assumed.
+
+* **Previous design: predict in IF from the AHB bus.** The instruction arriving on `I_HRDATA` is decoded, the target is computed, and the result drives `I_HADDR` in the same cycle. A predicted-taken branch or `JAL` costs no bubbles.
+* **Final design: predict in ID from the IF/ID register.** The same decode and target logic reads a flip-flop instead of the bus. A predicted-taken branch or `JAL` costs one bubble.
+
+The previous design was first repaired so that the comparison is fair. As committed, it fetched each predicted target twice and let wrong-path instructions redirect the fetch after a misprediction. With three fixes (load `target + 4` into the PC, squash the wrong-path word that arrives one cycle after an EX correction, and block predictions from squashed words) it passes all 97 checks.
+
+### Measured Results
+
+| | Previous design (IF, fixed) | Final design (ID) |
+| :--- | :--- | :--- |
+| Directed testbench | 97 / 97 | 97 / 97 |
+| Slow-corner clock, passing | 22 ns (+1.03 ns slack), 45.5 MHz | 19 ns (+0.18 ns slack), 52.6 MHz |
+| Slow-corner clock, failing | not run below 22 ns | 18.5 ns (−0.12 ns) |
+| CPI kernel (61 instr) | 67 cycles, **CPI 1.098** | 83 cycles, **CPI 1.361** |
+| Whole test program | 512 cycles | 549 cycles |
+| Kernel run time | 67 × 22 = **1,474 ns** | 83 × 19 = **1,577 ns** (7% slower) |
+| Whole program run time | 512 × 22 = **11,264 ns** | 549 × 19 = **10,431 ns** (8% faster) |
+| Total power | 21.66 mW at 22 ns | 24.13 mW at 19 ns |
+| Standard cell area | $121{,}305\ \mu\text{m}^2$ | $121{,}692\ \mu\text{m}^2$ |
+
+All cycle counts are with single-cycle (zero wait state) memories. The CPI kernel is a 20-iteration loop in which every third instruction is a taken branch; the whole test program is the full directed testbench. Neither is a standard benchmark.
+
+### Trade-off
+
+Moving the prediction to ID raised $F_{\max}$ by 15.8%. The final design is faster whenever the extra bubbles add fewer than 15.8% more cycles. On the tight loop they add 23.9%, so the previous design wins; on the whole test program they add 7.2%, so the final design wins. The faster design therefore depends on how often the target software takes branches. The previous design's slack at 22 ns suggests it may close near 21 ns, which would not change which design wins either workload.
+
+### Why the Final Design Was Chosen
+
+The deciding factor was timing robustness, not raw speed. In the previous design the critical path was a combinational path from input pins to output pins, `I_HREADY` / `I_HRDATA` → `I_HADDR`: the fetched instruction had to arrive from memory, be decoded, have its target added, and select the next fetch address, all in one cycle. Every nanosecond the instruction memory takes to return data comes straight out of the time left for prediction. In this flow the memory is outside the block and only default I/O delays were assumed. In a real SoC, a slower SRAM macro or bus interconnect would lengthen this path and lower the clock, and the block's timing would depend on whatever memory it is connected to.
+
+In the final design the prediction path starts at the IF/ID flip-flop. The instruction bus only has to meet a register's setup time, and the prediction logic gets the full cycle regardless of memory latency. Timing is contained inside the block, so it can be signed off on its own and integrated with different memories without re-closing the core. That robustness was worth one bubble per predicted-taken branch.
+
+A branch target buffer (BTB), indexed by the fetch PC instead of the fetched instruction, would give zero-bubble taken branches while keeping the prediction path register-based. It is a natural next step.
+
+### Critical Path
+
+The previous design's critical path was the input-to-output path `I_HREADY` → `I_HADDR[30]` described above, dominated by the target adder's carry chain. In the final design that path starts at the IF/ID flip-flop. The critical path report for the final design has not yet been analyzed.
 
 ## Prerequisites
 
@@ -192,14 +233,15 @@ cd RV32I
 
 ### Simulation
 ```bash
-# Compile design and testbench
-verilator --binary --timing --trace --top tb_comprehensive -f filelist.f
+# Compile design and testbench (test_core_asic.mem and data_memory.hex must be
+# in the directory you run the simulation from)
+verilator --binary --timing --assert --trace --top tb_core_asic -f filelist.f
 
 # Run simulation
-./obj_dir/Vtb_comprehensive
+./obj_dir/Vtb_core_asic
 
 # View waveform
-gtkwave core_test_comprehensive.vcd
+gtkwave tb_core_asic.vcd
 ```
 
 ### Physical Layout and Signoff (ASIC)
@@ -207,7 +249,7 @@ gtkwave core_test_comprehensive.vcd
 ```bash
 # 1. Convert SystemVerilog RTL to plain Verilog for OpenLane
 #    (only needed after RTL changes; RV32I_core_asic.v is checked in)
-yosys openlane/asic/sv2v.ys
+yosys -m slang openlane/asic/sv2v.ys
 
 # 2. Run OpenLane
 openlane --dockerized openlane/asic/config.json
@@ -216,6 +258,6 @@ openlane --dockerized openlane/asic/config.json
 cd openlane/asic/runs/RUN_[date and time]/final
 cat metrics.csv
 
-# Sanity check: flip-flop count should be ~1,575
+# Sanity check: flip-flop count should be ~1,572
 grep -cE "sky130_fd_sc_hd__(df|edf|sdf)" nl/RV32I_core_asic.nl.v
 ```

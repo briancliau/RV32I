@@ -3,7 +3,7 @@
   "VERILOG_FILES": ["dir::RV32I_core_asic.v"],
 
   "CLOCK_PORT": "CLK",
-  "CLOCK_PERIOD": 20.0,
+  "CLOCK_PERIOD": 18.5,
 
   "FP_SIZING": "relative",
   "FP_CORE_UTIL": 40,

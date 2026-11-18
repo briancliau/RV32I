@@ -13,20 +13,14 @@ module BranchAddresser (
     input  rvDefs::opcode_t opcode,
     output logic [31:0]     BranchAddress
 );
-    import rvDefs::*;
-
-    // Calculate PC-relative target address for JAL and Branch instructions
     always_comb begin
-        case (opcode)
-            rvDefs::OPCODE_JAL,
-            rvDefs::OPCODE_BRANCH: begin
-                BranchAddress = PCAddress + offset;
-            end
-            
-            default: begin
-                BranchAddress = 32'b0;
-            end
-        endcase
+        if (opcode == rvDefs::OPCODE_JAL) begin
+            BranchAddress = PCAddress + offset;
+        end else if (opcode == rvDefs::OPCODE_BRANCH) begin
+            BranchAddress = PCAddress + offset;
+        end else begin
+            BranchAddress = 32'b0;
+        end
     end
 
 endmodule

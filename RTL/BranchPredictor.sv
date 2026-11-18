@@ -7,48 +7,24 @@
 // Dependencies: rvDefs.sv
 // Target      : Synthesis
 //------------------------------------------------------------------------------
-module BranchPredictor 
-(
+module BranchPredictor (
     input  logic                clk,
     input  logic                resetN,
-    input  logic                branchTaken,
-    input  logic                branchRequested,
+    input  logic                branchRequested,   // branch/JAL decoded in ID (prediction lookup)
+    input  logic                branchResolved,    // a branch is in EX and advancing this cycle
+    input  logic                branchTaken,       // its actual outcome
     output logic                branchPrediction
 );
-    // 2-bit Saturation Counter
-    logic [1:0]             saturationCounter;
+    logic [1:0] saturationCounter;
 
-    // Combinational assignment for branch prediction
     assign branchPrediction = branchRequested && (saturationCounter >= 2'b10);
-    
-    // Branch outcome comparison signals
-    logic                   req_delay1;
-    logic                   req_delay2;
-    logic                   req_delay3;
-    logic                   branchTaken_delay1;
 
-    // Branch outcome and prediction comparison and correction 
     always_ff @(posedge clk or negedge resetN) begin
         if (!resetN) begin
             saturationCounter <= 2'b01;
-            req_delay1        <= 1'b0;
-            req_delay2        <= 1'b0;
-            req_delay3        <= 1'b0;
-            branchTaken_delay1 <= 1'b0;
-        end else begin
-            req_delay3 <= req_delay2;
-            req_delay2 <= req_delay1;
-            req_delay1 <= branchRequested;
-            branchTaken_delay1 <= branchTaken;
-
-            if (req_delay3) begin
-                if (branchTaken_delay1 && saturationCounter != 2'b11) begin
-                    saturationCounter <= saturationCounter + 1'b1;
-                end else if (!branchTaken_delay1 && saturationCounter != 2'b00) begin
-                    saturationCounter <= saturationCounter - 1'b1;
-                end
-            end
+        end else if (branchResolved) begin
+            if (branchTaken  && saturationCounter != 2'b11) saturationCounter <= saturationCounter + 1'b1;
+            else if (!branchTaken && saturationCounter != 2'b00) saturationCounter <= saturationCounter - 1'b1;
         end
     end
-
 endmodule
