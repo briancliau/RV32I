@@ -122,7 +122,7 @@ Each phase uses a *canary* register or memory word that only a wrong-path instru
 
 ### ASIC Hardening Top (`RV32I_core_asic`)
 
-The ASIC flow uses a dedicated top, `RTL/asic/RV32I_core_asic.sv`, separate from the FPGA/UPduino top (`RV32I_subsystem`):
+The ASIC flow uses a dedicated top, `RTL/asic/RV32I_core_asic.sv`, separate from the FPGA/Arty A7-100T top (`RV32I_subsystem`):
 
 * **Hardened block** = RV32I core + AHB-Lite instruction and data managers (`RTL/asic/AHB*ManagerPort.sv`).
 * **Both AHB-Lite buses are top-level ports** (`I_*` and `D_*`). Instruction and data memories sit outside the block, as SRAM macros would in a real SoC.
